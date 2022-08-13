@@ -41,13 +41,12 @@ pub struct RoosterOptions {
 pub mod tests {
     use super::*;
 
-    //#[test]
-    // unclear why these tests do not work
+    #[test]
     fn test_parse_args() -> Result<(), std::io::Error> {
         assert_eq!(RoosterOptions {
             debug_graspmessages: true,
             ignored_interfaces: vec![], acp_interfaces: vec![], downlink_interfaces: vec![]
-        }, RoosterOptions::from_iter(&["--debug-graspmessage=true"]));
+        }, RoosterOptions::from_iter(&["--debug-graspmessage"]));
 
         Ok(())
     }
