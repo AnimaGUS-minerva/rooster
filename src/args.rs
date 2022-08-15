@@ -21,19 +21,19 @@ use structopt::StructOpt;
 /// Hermes Rooster Join-Proxy for ACP
 pub struct RoosterOptions {
     // turn on debugging from Grasp DULL
-    #[structopt(default_value = "false", long, parse(try_from_str))]
+    #[structopt(long)]
     debug_graspmessages: bool,
 
     // list of interfaces to ignore when auto-configuring
-    #[structopt(long="ignore-interface")]
+    #[structopt(long="--ignore-interface")]
     ignored_interfaces: Vec<String>,
 
     // uplink interfaces
-    #[structopt(long="acp-interface")]
+    #[structopt(long="--acp-interface")]
     acp_interfaces: Vec<String>,
 
     // downlink interfaces
-    #[structopt(long="downlink-interface")]
+    #[structopt(long="--downlink-interface")]
     downlink_interfaces: Vec<String>,
 }
 
@@ -42,13 +42,33 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_args() -> Result<(), std::io::Error> {
-        assert_eq!(RoosterOptions {
-            debug_graspmessages: true,
-            ignored_interfaces: vec![], acp_interfaces: vec![], downlink_interfaces: vec![]
-        }, RoosterOptions::from_iter(&["--debug-graspmessage"]));
-
+    fn test_parse_debugmsg() -> Result<(), std::io::Error> {
+        assert_eq!(
+            RoosterOptions::from_iter_safe(&["rooster","--debug-graspmessages"]).unwrap(),
+            RoosterOptions {
+                debug_graspmessages: true,
+                ignored_interfaces: vec![], acp_interfaces: vec![],
+                downlink_interfaces: vec![]
+            });
         Ok(())
+    }
+
+    #[test]
+    fn test_acp_add() -> Result<(), std::io::Error> {
+        assert_eq!(
+            RoosterOptions::from_iter_safe(&["rooster","--acp-interface=eth0"]).unwrap(),
+            RoosterOptions {
+                debug_graspmessages: false,
+                ignored_interfaces: vec![], acp_interfaces: vec!["eth0".to_string()], downlink_interfaces: vec![]
+            });
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_help_msg() -> () {
+        RoosterOptions::from_iter_safe(&["rooster","--help"]).unwrap();
+        ()
     }
 }
 
