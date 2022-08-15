@@ -20,21 +20,52 @@ use structopt::StructOpt;
 #[derive(StructOpt, PartialEq, Debug)]
 /// Hermes Rooster Join-Proxy for ACP
 pub struct RoosterOptions {
-    // turn on debugging from Grasp DULL
+    /// turn on debugging from Grasp DULL
     #[structopt(long)]
     debug_graspmessages: bool,
 
-    // list of interfaces to ignore when auto-configuring
+    /// list of interfaces to ignore when auto-configuring
     #[structopt(long="--ignore-interface")]
     ignored_interfaces: Vec<String>,
 
-    // uplink interfaces
+    /// list of interfaces that should be uplink interfaces
     #[structopt(long="--acp-interface")]
     acp_interfaces: Vec<String>,
 
-    // downlink interfaces
+    /// list of interfaces that should be downlink interfaces
     #[structopt(long="--downlink-interface")]
     downlink_interfaces: Vec<String>,
+}
+
+impl RoosterOptions {
+    pub fn is_valid_acp_interface(self: &Self, ifname: String) -> bool {
+        if self.ignored_interfaces.contains(&ifname) {
+            return false;
+        }
+
+        // must explicitely mentioned, otherwise, it is a downlink interface
+        if self.acp_interfaces.contains(&ifname) {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_valid_downlink_interface(self: &Self, ifname: String) -> bool {
+        if self.ignored_interfaces.contains(&ifname) {
+            return false;
+        }
+
+        // if it is mentioned, then consider it spoken for
+        if self.downlink_interfaces.contains(&ifname) {
+            return true;
+        }
+
+        // otherwise, if the list is empty, then it is automatically chosen
+        if self.downlink_interfaces.is_empty() {
+            return true;
+        }
+        return false;
+    }
 }
 
 #[cfg(test)]
@@ -85,6 +116,59 @@ pub mod tests {
     fn test_help_msg() -> () {
         RoosterOptions::from_iter_safe(&["rooster","--help"]).unwrap();
         ()
+    }
+
+    #[test]
+    fn test_eth0_is_ignored() -> Result<(), std::io::Error> {
+        let ro1 = RoosterOptions {
+            debug_graspmessages: false,
+            ignored_interfaces: vec!["eth0".to_string()],
+            acp_interfaces: vec![],
+            downlink_interfaces: vec!["eth0".to_string()]
+        };
+        assert_eq!(ro1.is_valid_downlink_interface("eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_acp_interface("eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_downlink_interface("eth1".to_string()), false);
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth0_is_downlink() -> Result<(), std::io::Error> {
+        let ro1 = RoosterOptions {
+            debug_graspmessages: false,
+            ignored_interfaces: vec!["eth1".to_string()],
+            acp_interfaces: vec![],
+            downlink_interfaces: vec!["eth0".to_string()]
+        };
+        assert_eq!(ro1.is_valid_downlink_interface("eth0".to_string()), true);
+        assert_eq!(ro1.is_valid_acp_interface("eth0".to_string()), false);
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth0_is_acp() -> Result<(), std::io::Error> {
+        let ro1 = RoosterOptions {
+            debug_graspmessages: false,
+            ignored_interfaces: vec!["eth1".to_string()],
+            acp_interfaces: vec!["eth2".to_string()],
+            downlink_interfaces: vec!["eth0".to_string()]
+        };
+        assert_eq!(ro1.is_valid_downlink_interface("eth2".to_string()), false);
+        assert_eq!(ro1.is_valid_acp_interface("eth2".to_string()), true);
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth0_is_implicit_downlink() -> Result<(), std::io::Error> {
+        let ro1 = RoosterOptions {
+            debug_graspmessages: false,
+            ignored_interfaces: vec![],
+            acp_interfaces: vec![],
+            downlink_interfaces: vec![]
+        };
+        assert_eq!(ro1.is_valid_downlink_interface("eth2".to_string()), true);
+        assert_eq!(ro1.is_valid_acp_interface("eth2".to_string()), false);
+        Ok(())
     }
 }
 
