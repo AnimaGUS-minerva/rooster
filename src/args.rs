@@ -65,6 +65,22 @@ pub mod tests {
     }
 
     #[test]
+    fn test_acp_two_add() -> Result<(), std::io::Error> {
+        assert_eq!(
+            RoosterOptions::from_iter_safe(&["rooster",
+                                             "--acp-interface=eth0",
+                                             "--acp-interface=eth1"
+            ]).unwrap(),
+            RoosterOptions {
+                debug_graspmessages: false,
+                ignored_interfaces: vec![],
+                acp_interfaces: vec!["eth0".to_string(),"eth1".to_string()],
+                downlink_interfaces: vec![]
+            });
+        Ok(())
+    }
+
+    #[test]
     #[should_panic]
     fn test_help_msg() -> () {
         RoosterOptions::from_iter_safe(&["rooster","--help"]).unwrap();
