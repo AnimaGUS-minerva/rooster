@@ -123,6 +123,13 @@ pub mod tests {
             ifind02.ifname = "eth0".to_string();   // yes, same name
         }
 
+        /* retrieve it and see that it kept the data */
+        let lifind03 = allif.get_entry_by_ifindex(1).await;
+        {
+            let mut ifind03 = lifind03.lock().await;
+            assert_eq!(ifind03.ifname, "eth0".to_string());
+        }
+
         assert_eq!(allif.interfaces.len(), 2);
         Ok(())
     }
