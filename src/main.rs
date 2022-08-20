@@ -19,7 +19,7 @@ use tokio::runtime;
 use structopt::StructOpt;
 
 pub mod debugoptions;
-//pub mod interfaces;
+pub mod interfaces;
 pub mod args;
 
 use crate::args::RoosterOptions;
@@ -31,6 +31,13 @@ async fn main() {
     // interface.
     let mainargs = RoosterOptions::from_args();
     println!("Read in args: {:?}\n", mainargs);
+
+    let mut debug_options = crate::debugoptions::DebugOptions::default();
+    if mainargs.debug_graspmessages {
+        debug_options.debug_interfaces = true;
+    }
+
+    //let _listenfuture = crate::interfaces::listen_network(&debug_options);
 }
 
 

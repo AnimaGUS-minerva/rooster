@@ -22,7 +22,7 @@ use structopt::StructOpt;
 pub struct RoosterOptions {
     /// turn on debugging from Grasp DULL
     #[structopt(long)]
-    debug_graspmessages: bool,
+    pub debug_graspmessages: bool,
 
     /// list of interfaces to ignore when auto-configuring
     #[structopt(long="--ignore-interface")]
