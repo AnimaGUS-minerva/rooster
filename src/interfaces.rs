@@ -82,7 +82,7 @@ struct AllInterfaces {
 }
 
 impl AllInterfaces {
-    pub fn default() -> Interface {
+    pub fn default() -> AllInterfaces {
         return AllInterfaces {
             debug:      DebugOptions::default(),
             interfaces: HashMap::new(),
@@ -108,17 +108,23 @@ pub mod tests {
         };
     }
 
-    async fn async_search_entry(allif: &AllInterface) -> Result<(), std::io::Error> {
-        let ifind01 = allif.get_entry_by_ifindex(1).await;
-        assert_eq!(ifind01.ifindex, 1);
-        ifind01.ifname = "eth0".to_string();
+    async fn async_search_entry(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+        let lifind01 = allif.get_entry_by_ifindex(1).await;
+        {
+            let mut ifind01 = lifind01.lock().await;
+            assert_eq!(ifind01.ifindex, 1);
+            ifind01.ifname = "eth0".to_string();
+        }
 
-        let ifind02 = allif.get_entry_by_ifindex(2).await;
-        assert_eq!(ifind02.ifindex, 2);
-        ifind01.ifname = "eth0".to_string();   // yes, same name
+        let lifind02 = allif.get_entry_by_ifindex(2).await;
+        {
+            let mut ifind02 = lifind02.lock().await;
+            assert_eq!(ifind02.ifindex, 2);
+            ifind02.ifname = "eth0".to_string();   // yes, same name
+        }
 
-        assert_eq!(allif.interfaces.size(), 2);
-        OK(())
+        assert_eq!(allif.interfaces.len(), 2);
+        Ok(())
     }
 
     #[test]
@@ -127,9 +133,17 @@ pub mod tests {
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
                                  debug_output: awriter.clone() };
-        let all1 = AllInterface::default().debug = db1;
+        let mut all1 = AllInterfaces::default();
+        all1.debug = db1;
 
-        aw!(async_search_entry(&all1)).unwrap();
+        aw!(async_search_entry(&mut all1)).unwrap();
         Ok(())
     }
 }
+
+/*
+ * Local Variables:
+ * mode: rust
+ * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
+ * End:
+ */

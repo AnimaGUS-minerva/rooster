@@ -26,7 +26,7 @@ pub struct DebugOptions {
 }
 
 impl DebugOptions {
-    pub fn empty() -> DebugOptions {
+    pub fn default() -> DebugOptions {
         DebugOptions {
             debug_interfaces:  false,
             debug_output:      Arc::new(Mutex::new(io::stdout()))
@@ -75,6 +75,6 @@ pub mod tests {
 /*
  * Local Variables:
  * mode: rust
- * compile-command: "cd .. && cargo build"
+ * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
  * End:
  */
