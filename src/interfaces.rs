@@ -42,10 +42,13 @@ use netlink_packet_route::{
     RtnlMessage::NewAddress,
     RtnlMessage::NewRoute,
     RtnlMessage::DelRoute,
-    LinkMessage, AddressMessage
+    LinkMessage, AddressMessage, AddressHeader,
+    AF_INET, AF_INET6
+
 };
 use netlink_packet_route::link::nlas::AfSpecInet;
 use netlink_packet_route::link::nlas::State;
+use netlink_packet_route::address::Nla;
 
 use crate::debugoptions::DebugOptions;
 
@@ -96,6 +99,47 @@ impl AllInterfaces {
         return ifnl.clone();
     }
 
+    pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces, am: AddressMessage) -> Option<Arc<Mutex<Interface>>> {
+        let mut mydebug = self.debug.clone();
+        let lh = am.header;
+        let ifindex = lh.index;
+
+        mydebug.debug_info(format!("ifindex: {} family: {}", ifindex, lh.family));
+
+        let     ifna = self.get_entry_by_ifindex(ifindex).await;
+        let mut ifn  = ifna.lock().await;
+
+        for nlas in am.nlas {
+            use netlink_packet_route::address::Nla;
+            match nlas {
+                Nla::Address(addrset) => {
+                    if addrset.len() != 16 {
+                        continue;
+                    }
+                    let mut addrbytes: [u8; 16] = [0; 16];
+                    for n in 0..=15 {
+                        addrbytes[n] = addrset[n]
+                    }
+                    let llv6 = Ipv6Addr::from(addrbytes);
+                    if llv6.segments()[0] != 0xfe80 {
+                        continue;
+                    }
+                    ifn.linklocal6 = llv6;
+                    mydebug.debug_info(format!("llv6: {}", ifn.linklocal6));
+                },
+                Nla::CacheInfo(_info) => { /* nothing */},
+                Nla::Flags(_info)     => { /* nothing */},
+                _ => {
+                    mydebug.debug_info(format!("data: {:?} ", nlas));
+                }
+            }
+        }
+        mydebug.debug_info(format!(""));
+
+        return None;
+    }
+
+
 }
 
 
@@ -121,6 +165,21 @@ pub mod tests {
     }
 
     async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+        let am = AddressMessage {
+            header: AddressHeader { family: AF_INET6 as u8,
+                                    prefix_len: 64,
+                                    flags: 0,
+                                    scope: 0,
+                                    index: 10
+            },
+            nlas: vec![
+                Nla::Address(vec![0xfe, 0x80, 0,0, 0,0,0,0,
+                                  0x00, 0x00, 0,0, 0,0,0,1])
+            ],
+        };
+        assert_eq!(allif.interfaces.len(), 0);
+        let _lnewif = allif.store_addr_info(am).await;
+        assert_eq!(allif.interfaces.len(), 1);
         Ok(())
     }
 
