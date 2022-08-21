@@ -29,6 +29,7 @@ use std::net::Ipv6Addr;
 use std::collections::HashMap;
 use std::sync::Arc;
 use futures::lock::Mutex;
+use futures::stream::StreamExt;
 
 use rtnetlink::{
     constants::{RTMGRP_IPV6_ROUTE, RTMGRP_IPV6_IFADDR, RTMGRP_LINK},
@@ -39,9 +40,11 @@ use rtnetlink::{
 use netlink_packet_route::{
     NetlinkPayload::InnerMessage,
     RtnlMessage::NewLink,
+    RtnlMessage::DelLink,
     RtnlMessage::NewAddress,
     RtnlMessage::NewRoute,
     RtnlMessage::DelRoute,
+    RtnlMessage::DelAddress,
     LinkMessage, AddressMessage, AddressHeader,
     AF_INET, AF_INET6
 
@@ -51,6 +54,7 @@ use netlink_packet_route::link::nlas::State;
 use netlink_packet_route::address::Nla;
 
 use crate::debugoptions::DebugOptions;
+use crate::args::RoosterOptions;
 
 pub type IfIndex = u32;
 
@@ -146,8 +150,74 @@ impl AllInterfaces {
         Ok(())
     }
 
+    pub async fn listen_network(lallif: &Arc<Mutex<AllInterfaces>>,
+                                mydebug: &DebugOptions,
+                                options: &RoosterOptions) ->
+        Result<tokio::task::JoinHandle<Result<(),Error>>, String>
+    {
+        let mut myif = lallif.clone();
+        let listenhandle = tokio::spawn(async move {
+            // Open the netlink socket
+            let (mut connection, handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
+
+            // These flags specify what kinds of broadcast messages we want to listen for.
+            let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
+
+            // A netlink socket address is created with said flags.
+            let addr = SocketAddr::new(0, mgroup_flags);
+
+            // Said address is bound so new connections and
+            // thus new message broadcasts can be received.
+            connection.socket_mut().socket_mut().bind(&addr).expect("failed to bind");
+
+            let mut debug = {
+                let mut allif   = myif.lock().await;
+                allif.debug.clone()
+            };
+
+            tokio::spawn(connection);
+
+            while let Some((message, _)) = messages.next().await {
+                let payload = message.payload;
+                match payload {
+                    InnerMessage(DelRoute(_stuff)) => {
+                        /* happens when acp_001 is moved to another namespace */
+                        /* need to sort out when it is relevant */
+                    }
+                    InnerMessage(DelAddress(_stuff)) => {
+                        /* happens when acp_001 is moved to another namespace */
+                        /* need to sort out when it is relevant by looking at name and LinkHeader */
+                    }
+                    InnerMessage(DelLink(_stuff)) => {
+                        /* happens when acp_001 is moved to another namespace */
+                        /* need to sort out when it is relevant by looking at name and LinkHeader */
+                    }
+                    InnerMessage(NewLink(stuff)) => {
+                        // nothing special with the link info for now.
+                        //AllInterfaces::gather_link_info(lallif.clone(),
+                        //                                stuff).await.unwrap();
+                    }
+                    InnerMessage(NewAddress(stuff)) => {
+                        let _sifn = AllInterfaces::gather_addr_info(&myif,
+                                                                    stuff).await.unwrap();
+                    }
+                    InnerMessage(NewRoute(_thing)) => {
+                        /* just ignore these! */
+                    }
+                    //_ => { println!("generic message type: {} skipped", payload.message_type()); }
+                    _ => {
+                        debug.debug_info(format!("msg type: {:?}", payload));
+                    }
+                }
+            };
+            Ok(())
+        });
+        Ok(listenhandle)
+    }
 
 }
+
+
 
 
 pub mod tests {

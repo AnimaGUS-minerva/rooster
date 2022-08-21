@@ -23,7 +23,7 @@ use futures::lock::Mutex;
 #[derive(Clone, Debug)]
 pub struct DebugOptions {
     pub debug_interfaces:  bool,
-    pub debug_output:      Arc<Mutex<dyn Write>>
+    pub debug_output:      Arc<Mutex<dyn Write + Send>>
 }
 
 impl DebugOptions {
