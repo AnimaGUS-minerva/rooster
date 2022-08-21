@@ -99,7 +99,8 @@ impl AllInterfaces {
         return ifnl.clone();
     }
 
-    pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces, am: AddressMessage) -> Option<Arc<Mutex<Interface>>> {
+    // not really sure what this can really return
+    pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces, am: AddressMessage) {
         let mut mydebug = self.debug.clone();
         let lh = am.header;
         let ifindex = lh.index;
@@ -135,8 +136,14 @@ impl AllInterfaces {
             }
         }
         mydebug.debug_info(format!(""));
+    }
 
-        return None;
+    pub async fn gather_addr_info(lallif: &Arc<Mutex<AllInterfaces>>, am: AddressMessage) -> Result<(), Error> {
+        let mut allif   = lallif.lock().await;
+        let mut mydebug = allif.debug.clone();
+
+        allif.store_addr_info(am).await;
+        Ok(())
     }
 
 
@@ -164,8 +171,9 @@ pub mod tests {
         (awriter, all1)
     }
 
-    async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
-        let am = AddressMessage {
+    /* define a new interface with ifindex and a Link-Local address */
+    fn setup_am() -> AddressMessage {
+        AddressMessage {
             header: AddressHeader { family: AF_INET6 as u8,
                                     prefix_len: 64,
                                     flags: 0,
@@ -176,9 +184,12 @@ pub mod tests {
                 Nla::Address(vec![0xfe, 0x80, 0,0, 0,0,0,0,
                                   0x00, 0x00, 0,0, 0,0,0,1])
             ],
-        };
+        }
+    }
+
+    async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         assert_eq!(allif.interfaces.len(), 0);
-        let _lnewif = allif.store_addr_info(am).await;
+        allif.store_addr_info(setup_am()).await;
         assert_eq!(allif.interfaces.len(), 1);
         Ok(())
     }
@@ -190,6 +201,26 @@ pub mod tests {
         Ok(())
     }
 
+    async fn async_locked_add_interface(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 0);
+        }
+        AllInterfaces::gather_addr_info(lallif, setup_am()).await;
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 1);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_add_interface() -> Result<(), std::io::Error> {
+        let (awriter, mut all1) = setup_ai();
+        let mut lallif = Arc::new(Mutex::new(all1));
+        aw!(async_locked_add_interface(&mut lallif)).unwrap();
+        Ok(())
+    }
 
     async fn async_search_entry(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         let lifind01 = allif.get_entry_by_ifindex(1).await;
