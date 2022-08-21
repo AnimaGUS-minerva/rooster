@@ -95,6 +95,7 @@ impl AllInterfaces {
         let ifnl = self.interfaces.entry(ifindex).or_insert_with(|| { Arc::new(Mutex::new(Interface::empty(ifindex)))});
         return ifnl.clone();
     }
+
 }
 
 
@@ -107,6 +108,29 @@ pub mod tests {
             tokio_test::block_on($e)
         };
     }
+
+    fn setup_ai() -> (Arc<Mutex<Vec<u8>>>, AllInterfaces) {
+        let writer: Vec<u8> = vec![];
+        let awriter = Arc::new(Mutex::new(writer));
+        let db1 = DebugOptions { debug_interfaces: true,
+                                 debug_output: awriter.clone() };
+        let mut all1 = AllInterfaces::default();
+        all1.debug = db1;
+
+        (awriter, all1)
+    }
+
+    async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_interface() -> Result<(), std::io::Error> {
+        let (awriter, mut all1) = setup_ai();
+        aw!(async_add_interface(&mut all1)).unwrap();
+        Ok(())
+    }
+
 
     async fn async_search_entry(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         let lifind01 = allif.get_entry_by_ifindex(1).await;
@@ -136,13 +160,7 @@ pub mod tests {
 
     #[test]
     fn test_search_entry() -> Result<(), std::io::Error> {
-        let writer: Vec<u8> = vec![];
-        let awriter = Arc::new(Mutex::new(writer));
-        let db1 = DebugOptions { debug_interfaces: true,
-                                 debug_output: awriter.clone() };
-        let mut all1 = AllInterfaces::default();
-        all1.debug = db1;
-
+        let (_awriter, mut all1) = setup_ai();
         aw!(async_search_entry(&mut all1)).unwrap();
         Ok(())
     }

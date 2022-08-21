@@ -20,6 +20,7 @@ use std::io;
 use std::sync::Arc;
 use futures::lock::Mutex;
 
+#[derive(Clone, Debug)]
 pub struct DebugOptions {
     pub debug_interfaces:  bool,
     pub debug_output:      Arc<Mutex<dyn Write>>
@@ -34,7 +35,7 @@ impl DebugOptions {
     }
 
     pub async fn debug_info(self: &mut Self,
-                      msg: &str) {
+                            msg: String) {
         if self.debug_interfaces {
             let mut output = self.debug_output.lock().await;
             writeln!(output, "{}", msg).unwrap();
@@ -63,7 +64,7 @@ pub mod tests {
         Ok(())
     }
     async fn atest_debug_info(awriter: Arc<Mutex<Vec<u8>>>, mut db1: DebugOptions) -> Result<(), std::io::Error>  {
-        db1.debug_info("hello").await;
+        db1.debug_info("hello".to_string()).await;
         let output = awriter.lock().await;
         let stuff = std::str::from_utf8(&output).unwrap();
         assert_eq!(stuff, "hello\n");
