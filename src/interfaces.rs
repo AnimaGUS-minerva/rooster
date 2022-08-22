@@ -58,7 +58,7 @@ use crate::args::RoosterOptions;
 
 pub type IfIndex = u32;
 
-struct Interface {
+pub struct Interface {
     pub ifindex:       IfIndex,
     pub ifname:        String,
     pub ignored:       bool,
@@ -81,7 +81,7 @@ impl Interface {
     }
 }
 
-struct AllInterfaces {
+pub struct AllInterfaces {
     pub debug:           DebugOptions,
     pub interfaces:      HashMap<u32, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<u32, Arc<Mutex<Interface>>>,
@@ -109,7 +109,7 @@ impl AllInterfaces {
         let lh = am.header;
         let ifindex = lh.index;
 
-        mydebug.debug_info(format!("ifindex: {} family: {}", ifindex, lh.family));
+        mydebug.debug_info(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
 
         let     ifna = self.get_entry_by_ifindex(ifindex).await;
         let mut ifn  = ifna.lock().await;

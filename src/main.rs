@@ -17,12 +17,16 @@
 
 use tokio::runtime;
 use structopt::StructOpt;
+use std::sync::Arc;
+use futures::lock::Mutex;
+use tokio::time::{sleep, Duration};
 
 pub mod debugoptions;
 pub mod interfaces;
 pub mod args;
 
 use crate::args::RoosterOptions;
+use crate::interfaces::AllInterfaces;
 
 #[tokio::main]
 async fn main() {
@@ -37,7 +41,15 @@ async fn main() {
         debug_options.debug_interfaces = true;
     }
 
-    //let _listenfuture = crate::interfaces::listen_network(&debug_options);
+    let mut binterface = AllInterfaces::default();
+    binterface.debug = debug_options;
+    let mut interface = Arc::new(Mutex::new(binterface));
+
+    let listeninterface = interface.clone();
+    let listenfuture  = AllInterfaces::listen_network(&listeninterface,
+                                                      &mainargs);
+    listenfuture.await;
+    sleep(Duration::from_millis(1000000)).await;
 }
 
 
