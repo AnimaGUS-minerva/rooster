@@ -45,13 +45,12 @@ use netlink_packet_route::{
     RtnlMessage::NewRoute,
     RtnlMessage::DelRoute,
     RtnlMessage::DelAddress,
-    LinkMessage, AddressMessage, AddressHeader,
+    LinkMessage, LinkHeader, AddressMessage, AddressHeader,
     AF_INET, AF_INET6
 
 };
 use netlink_packet_route::link::nlas::AfSpecInet;
 use netlink_packet_route::link::nlas::State;
-use netlink_packet_route::address::Nla;
 
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
@@ -130,16 +129,68 @@ impl AllInterfaces {
                         continue;
                     }
                     ifn.linklocal6 = llv6;
-                    mydebug.debug_info(format!("llv6: {}", ifn.linklocal6));
+                    mydebug.debug_info(format!("llv6: {}", ifn.linklocal6)).await;
                 },
                 Nla::CacheInfo(_info) => { /* nothing */},
                 Nla::Flags(_info)     => { /* nothing */},
                 _ => {
-                    mydebug.debug_info(format!("data: {:?} ", nlas));
+                    mydebug.debug_info(format!("data: {:?} ", nlas)).await;
                 }
             }
         }
-        mydebug.debug_info(format!(""));
+        mydebug.debug_info(format!("")).await;
+    }
+
+    pub async fn store_link_info<'a>(self: &'a mut AllInterfaces, lm: LinkMessage) {
+        let mut mydebug = self.debug.clone();
+        let lh = lm.header;
+        let ifindex = lh.index;
+
+        let _results = {
+            let     ifna = self.get_entry_by_ifindex(ifindex).await;
+            let mut ifn  = ifna.lock().await;
+
+            for nlas in lm.nlas {
+                use netlink_packet_route::link::nlas::Nla;
+                match nlas {
+                    Nla::IfName(name) => {
+                        mydebug.debug_info(format!("ifname: {}", name));
+                        ifn.ifname = name;
+                    },
+                    Nla::Mtu(bytes) => {
+                        mydebug.debug_info(format!("mtu: {}", bytes));
+                        ifn.mtu = bytes;
+                    },
+                    Nla::Address(addrset) => {
+                        mydebug.debug_info(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5]));
+                    },
+                    Nla::OperState(state) => {
+                        if state == State::Up {
+                            mydebug.debug_info(format!("device is up"));
+                        }
+                        ifn.oper_state = state;
+                    },
+                    Nla::AfSpecInet(inets) => {
+                        for ip in inets {
+                            match ip {
+                                AfSpecInet::Inet(_v4) => { },
+                                AfSpecInet::Inet6(_v6) => {
+                                    //mydebug.debug_info(format!("v6: {:?}", v6));
+                                }
+                                _ => {}
+                            }
+                        }
+                    },
+                    _ => {
+                        //print!("data: {:?} ", nlas);
+                    }
+                }
+            }
+            mydebug.debug_info(format!(""));
+            (ifn.oper_state == State::Down, ifn.ifindex.clone(), ifn.ifname.clone())
+        };
+
+        return ();
     }
 
     pub async fn gather_addr_info(lallif: &Arc<Mutex<AllInterfaces>>, am: AddressMessage) -> Result<(), Error> {
@@ -150,13 +201,22 @@ impl AllInterfaces {
         Ok(())
     }
 
+    pub async fn gather_link_info(lallif: &Arc<Mutex<AllInterfaces>>, lm: LinkMessage) -> Result<(), Error> {
+        let mut allif   = lallif.lock().await;
+        let mut mydebug = allif.debug.clone();
+
+        allif.store_link_info(lm).await;
+        Ok(())
+    }
+
     pub async fn listen_network(lallif: &Arc<Mutex<AllInterfaces>>,
-                                mydebug: &DebugOptions,
                                 options: &RoosterOptions) ->
         Result<tokio::task::JoinHandle<Result<(),Error>>, String>
     {
         let mut myif = lallif.clone();
         let listenhandle = tokio::spawn(async move {
+            println!("listening to network");
+
             // Open the netlink socket
             let (mut connection, handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
 
@@ -178,6 +238,7 @@ impl AllInterfaces {
             tokio::spawn(connection);
 
             while let Some((message, _)) = messages.next().await {
+                debug.debug_info(format!("got some message")).await;
                 let payload = message.payload;
                 match payload {
                     InnerMessage(DelRoute(_stuff)) => {
@@ -193,9 +254,8 @@ impl AllInterfaces {
                         /* need to sort out when it is relevant by looking at name and LinkHeader */
                     }
                     InnerMessage(NewLink(stuff)) => {
-                        // nothing special with the link info for now.
-                        //AllInterfaces::gather_link_info(lallif.clone(),
-                        //                                stuff).await.unwrap();
+                        AllInterfaces::gather_link_info(&myif,
+                                                        stuff).await.unwrap();
                     }
                     InnerMessage(NewAddress(stuff)) => {
                         let _sifn = AllInterfaces::gather_addr_info(&myif,
@@ -206,7 +266,7 @@ impl AllInterfaces {
                     }
                     //_ => { println!("generic message type: {} skipped", payload.message_type()); }
                     _ => {
-                        debug.debug_info(format!("msg type: {:?}", payload));
+                        debug.debug_info(format!("msg type: {:?}", payload)).await;
                     }
                 }
             };
@@ -218,10 +278,12 @@ impl AllInterfaces {
 }
 
 
-
-
+#[cfg(test)]
 pub mod tests {
     use super::*;
+    use netlink_packet_route::ARPHRD_ETHER;
+    use netlink_packet_route::IFF_UP;
+    use netlink_packet_route::IFF_LOWER_UP;
 
     #[allow(unused_macros)]
     macro_rules! aw {
@@ -243,6 +305,8 @@ pub mod tests {
 
     /* define a new interface with ifindex and a Link-Local address */
     fn setup_am() -> AddressMessage {
+        use netlink_packet_route::address::nlas::Nla;
+
         AddressMessage {
             header: AddressHeader { family: AF_INET6 as u8,
                                     prefix_len: 64,
@@ -256,6 +320,7 @@ pub mod tests {
             ],
         }
     }
+
 
     async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         assert_eq!(allif.interfaces.len(), 0);
@@ -292,6 +357,46 @@ pub mod tests {
         Ok(())
     }
 
+    /* define a new interface with ifindex and a Link-Local address */
+    fn setup_lm() -> LinkMessage {
+        use netlink_packet_route::link::nlas::Nla;
+
+        LinkMessage {
+            header: LinkHeader { interface_family: AF_INET6 as u8,
+                                 index: 10,
+                                 link_layer_type: ARPHRD_ETHER,
+                                 flags: IFF_UP|IFF_LOWER_UP,
+                                 change_mask: 0xffff_ffff
+            },
+            nlas: vec![
+                Nla::IfName("eth0".to_string()),
+                Nla::Mtu(1500),
+                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0x9b, 0xba])
+            ],
+        }
+    }
+
+    async fn async_locked_add_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 0);
+        }
+        AllInterfaces::gather_link_info(lallif, setup_lm()).await;
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 1);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_add_link() -> Result<(), std::io::Error> {
+        let (awriter, mut all1) = setup_ai();
+        let mut lallif = Arc::new(Mutex::new(all1));
+        aw!(async_locked_add_link(&mut lallif)).unwrap();
+        Ok(())
+    }
+
     async fn async_search_entry(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         let lifind01 = allif.get_entry_by_ifindex(1).await;
         {
@@ -324,6 +429,9 @@ pub mod tests {
         aw!(async_search_entry(&mut all1)).unwrap();
         Ok(())
     }
+
+
+
 }
 
 /*
