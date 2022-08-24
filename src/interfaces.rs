@@ -100,7 +100,9 @@ impl AllInterfaces {
     }
 
     // not really sure what this can really return
-    pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces, am: AddressMessage) {
+    pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces,
+                                     _options: &RoosterOptions,
+                                     am: AddressMessage) {
         let mut mydebug = self.debug.clone();
         let lh = am.header;
         let ifindex = lh.index;
@@ -138,7 +140,9 @@ impl AllInterfaces {
         mydebug.debug_info(format!("")).await;
     }
 
-    pub async fn store_link_info<'a>(self: &'a mut AllInterfaces, lm: LinkMessage) {
+    pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
+                                     _options: &RoosterOptions,
+                                     lm: LinkMessage) {
         let mut mydebug = self.debug.clone();
         let lh = lm.header;
         let ifindex = lh.index;
@@ -190,27 +194,32 @@ impl AllInterfaces {
         return ();
     }
 
-    pub async fn gather_addr_info(lallif: &Arc<Mutex<AllInterfaces>>, am: AddressMessage) -> Result<(), Error> {
+    pub async fn gather_addr_info(lallif: &Arc<Mutex<AllInterfaces>>,
+                                  options: &RoosterOptions,
+                                  am: AddressMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
         let _mydebug = allif.debug.clone();
 
-        allif.store_addr_info(am).await;
+        allif.store_addr_info(options,am).await;
         Ok(())
     }
 
-    pub async fn gather_link_info(lallif: &Arc<Mutex<AllInterfaces>>, lm: LinkMessage) -> Result<(), Error> {
+    pub async fn gather_link_info(lallif: &Arc<Mutex<AllInterfaces>>,
+                                  options: &RoosterOptions,
+                                  lm: LinkMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
         let _mydebug = allif.debug.clone();
 
-        allif.store_link_info(lm).await;
+        allif.store_link_info(options,lm).await;
         Ok(())
     }
 
     pub async fn listen_network(lallif: &Arc<Mutex<AllInterfaces>>,
-                                _options: &RoosterOptions) ->
+                                options: &RoosterOptions) ->
         Result<tokio::task::JoinHandle<Result<(),Error>>, String>
     {
         let myif = lallif.clone();
+        let myoptions = options.clone();
         let listenhandle = tokio::spawn(async move {
             println!("listening to network");
 
@@ -251,10 +260,12 @@ impl AllInterfaces {
                     }
                     InnerMessage(NewLink(stuff)) => {
                         AllInterfaces::gather_link_info(&myif,
+                                                        &myoptions,
                                                         stuff).await.unwrap();
                     }
                     InnerMessage(NewAddress(stuff)) => {
                         let _sifn = AllInterfaces::gather_addr_info(&myif,
+                                                                    &myoptions,
                                                                     stuff).await.unwrap();
                     }
                     InnerMessage(NewRoute(_thing)) => {
@@ -322,8 +333,9 @@ pub mod tests {
 
 
     async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
         assert_eq!(allif.interfaces.len(), 0);
-        allif.store_addr_info(setup_am()).await;
+        allif.store_addr_info(&options, setup_am()).await;
         assert_eq!(allif.interfaces.len(), 1);
         Ok(())
     }
@@ -336,11 +348,12 @@ pub mod tests {
     }
 
     async fn async_locked_add_interface(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 0);
         }
-        AllInterfaces::gather_addr_info(lallif, setup_am()).await.unwrap();
+        AllInterfaces::gather_addr_info(lallif, &options, setup_am()).await.unwrap();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 1);
@@ -376,11 +389,12 @@ pub mod tests {
     }
 
     async fn async_locked_add_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 0);
         }
-        AllInterfaces::gather_link_info(lallif, setup_lm()).await.unwrap();
+        AllInterfaces::gather_link_info(lallif, &options, setup_lm()).await.unwrap();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 1);

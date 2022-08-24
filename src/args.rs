@@ -17,7 +17,7 @@
 
 use structopt::StructOpt;
 
-#[derive(StructOpt, PartialEq, Debug)]
+#[derive(StructOpt, PartialEq, Debug, Clone)]
 /// Hermes Rooster Join-Proxy for ACP
 pub struct RoosterOptions {
     /// turn on debugging from Grasp DULL
@@ -38,6 +38,15 @@ pub struct RoosterOptions {
 }
 
 impl RoosterOptions {
+    pub fn default() -> Self {
+        RoosterOptions {
+            debug_graspmessages: true,
+            ignored_interfaces: vec![],
+            acp_interfaces: vec![],
+            downlink_interfaces: vec![]
+        }
+    }
+
     pub fn is_valid_acp_interface(self: &Self, ifname: String) -> bool {
         if self.ignored_interfaces.contains(&ifname) {
             return false;
