@@ -141,15 +141,17 @@ impl AllInterfaces {
     }
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
-                                     _options: &RoosterOptions,
+                                     options: &RoosterOptions,
                                      lm: LinkMessage) {
         let mut mydebug = self.debug.clone();
         let lh = lm.header;
         let ifindex = lh.index;
 
-        let _results = {
+        let (old_oper_state, new_oper_state, ifname)  = {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let mut ifn  = ifna.lock().await;
+
+            let old_oper_state = ifn.oper_state;
 
             for nlas in lm.nlas {
                 use netlink_packet_route::link::nlas::Nla;
@@ -188,8 +190,31 @@ impl AllInterfaces {
                 }
             }
             mydebug.debug_info(format!("")).await;
-            (ifn.oper_state == State::Down, ifn.ifindex.clone(), ifn.ifname.clone())
+            (old_oper_state, ifn.oper_state, ifn.ifname.clone())
         };
+
+        // now process result values from,
+        // looking for interfaces which are now up, and which
+        if old_oper_state == State::Down && new_oper_state == State::Up {
+            let     ifna = self.get_entry_by_ifindex(ifindex).await;
+            let     ifn  = ifna.lock().await;
+
+            // looks like a new device that is now up!
+            if options.is_valid_acp_interface(&ifname) {
+                self.acp_interfaces.entry(ifindex).or_insert_with(|| {
+                    // ifna.start_acp();
+                    ifna.clone()
+                });
+            } else if options.is_valid_downlink_interface(&ifname) {
+                self.downlink_interfaces.entry(ifindex).or_insert_with(|| {
+                    // ifna.start_download();
+                    ifna.clone()
+                });
+            } else {
+                mydebug.debug_info(format!("interface {} ignored", ifn.ifname)).await;
+            }
+        }
+
 
         return ();
     }
