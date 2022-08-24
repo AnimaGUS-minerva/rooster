@@ -47,25 +47,25 @@ impl RoosterOptions {
         }
     }
 
-    pub fn is_valid_acp_interface(self: &Self, ifname: String) -> bool {
-        if self.ignored_interfaces.contains(&ifname) {
+    pub fn is_valid_acp_interface(self: &Self, ifname: &String) -> bool {
+        if self.ignored_interfaces.contains(ifname) {
             return false;
         }
 
         // must explicitely mentioned, otherwise, it is a downlink interface
-        if self.acp_interfaces.contains(&ifname) {
+        if self.acp_interfaces.contains(ifname) {
             return true;
         }
         return false;
     }
 
-    pub fn is_valid_downlink_interface(self: &Self, ifname: String) -> bool {
-        if self.ignored_interfaces.contains(&ifname) {
+    pub fn is_valid_downlink_interface(self: &Self, ifname: &String) -> bool {
+        if self.ignored_interfaces.contains(ifname) {
             return false;
         }
 
         // if it is mentioned, then consider it spoken for
-        if self.downlink_interfaces.contains(&ifname) {
+        if self.downlink_interfaces.contains(ifname) {
             return true;
         }
 
@@ -135,9 +135,9 @@ pub mod tests {
             acp_interfaces: vec![],
             downlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface("eth0".to_string()), false);
-        assert_eq!(ro1.is_valid_acp_interface("eth0".to_string()), false);
-        assert_eq!(ro1.is_valid_downlink_interface("eth1".to_string()), false);
+        assert_eq!(ro1.is_valid_downlink_interface(&"eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_acp_interface(&"eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_downlink_interface(&"eth1".to_string()), false);
         Ok(())
     }
 
@@ -149,8 +149,8 @@ pub mod tests {
             acp_interfaces: vec![],
             downlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface("eth0".to_string()), true);
-        assert_eq!(ro1.is_valid_acp_interface("eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_downlink_interface(&"eth0".to_string()), true);
+        assert_eq!(ro1.is_valid_acp_interface(&"eth0".to_string()), false);
         Ok(())
     }
 
@@ -162,8 +162,8 @@ pub mod tests {
             acp_interfaces: vec!["eth2".to_string()],
             downlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface("eth2".to_string()), false);
-        assert_eq!(ro1.is_valid_acp_interface("eth2".to_string()), true);
+        assert_eq!(ro1.is_valid_downlink_interface(&"eth2".to_string()), false);
+        assert_eq!(ro1.is_valid_acp_interface(&"eth2".to_string()), true);
         Ok(())
     }
 
@@ -175,8 +175,8 @@ pub mod tests {
             acp_interfaces: vec![],
             downlink_interfaces: vec![]
         };
-        assert_eq!(ro1.is_valid_downlink_interface("eth2".to_string()), true);
-        assert_eq!(ro1.is_valid_acp_interface("eth2".to_string()), false);
+        assert_eq!(ro1.is_valid_downlink_interface(&"eth2".to_string()), true);
+        assert_eq!(ro1.is_valid_acp_interface(&"eth2".to_string()), false);
         Ok(())
     }
 }
