@@ -44,9 +44,7 @@ use netlink_packet_route::{
     RtnlMessage::NewRoute,
     RtnlMessage::DelRoute,
     RtnlMessage::DelAddress,
-    LinkMessage, LinkHeader, AddressMessage, AddressHeader,
-    AF_INET6
-
+    LinkMessage, AddressMessage
 };
 use netlink_packet_route::link::nlas::AfSpecInet;
 use netlink_packet_route::link::nlas::State;
@@ -150,22 +148,23 @@ impl AllInterfaces {
             let mut ifn  = ifna.lock().await;
 
             for nlas in lm.nlas {
+                mydebug.debug_info(format!("link_info processing: {:?}", nlas)).await;
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
-                        mydebug.debug_info(format!("ifname: {}", name));
+                        mydebug.debug_info(format!("ifname: {}", name)).await;
                         ifn.ifname = name;
                     },
                     Nla::Mtu(bytes) => {
-                        mydebug.debug_info(format!("mtu: {}", bytes));
+                        mydebug.debug_info(format!("mtu: {}", bytes)).await;
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_info(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5]));
+                        mydebug.debug_info(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
-                            mydebug.debug_info(format!("device is up"));
+                            mydebug.debug_info(format!("device is up")).await;
                         }
                         ifn.oper_state = state;
                     },
@@ -173,8 +172,8 @@ impl AllInterfaces {
                         for ip in inets {
                             match ip {
                                 AfSpecInet::Inet(_v4) => { },
-                                AfSpecInet::Inet6(_v6) => {
-                                    //mydebug.debug_info(format!("v6: {:?}", v6));
+                                AfSpecInet::Inet6(v6) => {
+                                    mydebug.debug_info(format!("v6: {:?}", v6)).await;
                                 }
                                 _ => {}
                             }
@@ -185,7 +184,7 @@ impl AllInterfaces {
                     }
                 }
             }
-            mydebug.debug_info(format!(""));
+            mydebug.debug_info(format!("")).await;
             (ifn.oper_state == State::Down, ifn.ifindex.clone(), ifn.ifname.clone())
         };
 
@@ -275,13 +274,16 @@ impl AllInterfaces {
 
 }
 
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use netlink_packet_route::ARPHRD_ETHER;
     use netlink_packet_route::IFF_UP;
     use netlink_packet_route::IFF_LOWER_UP;
+    use netlink_packet_route::{
+        LinkHeader, AddressHeader,
+        AF_INET6
+    };
 
     #[allow(unused_macros)]
     macro_rules! aw {

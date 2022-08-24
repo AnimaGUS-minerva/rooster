@@ -43,6 +43,7 @@ impl DebugOptions {
     }
 }
 
+#[cfg(test)]
 pub mod tests {
     use super::*;
 
@@ -53,6 +54,14 @@ pub mod tests {
         };
     }
 
+    async fn atest_debug_info(awriter: Arc<Mutex<Vec<u8>>>, mut db1: DebugOptions) -> Result<(), std::io::Error>  {
+        db1.debug_info("hello".to_string()).await;
+        let output = awriter.lock().await;
+        let stuff = std::str::from_utf8(&output).unwrap();
+        assert_eq!(stuff, "hello\n");
+        Ok(())
+    }
+
     #[test]
     fn test_debug_info() -> Result<(), std::io::Error> {
         let writer: Vec<u8> = vec![];
@@ -61,13 +70,6 @@ pub mod tests {
                                      debug_output: awriter.clone() };
 
         aw!(atest_debug_info(awriter.clone(), db1)).unwrap();
-        Ok(())
-    }
-    async fn atest_debug_info(awriter: Arc<Mutex<Vec<u8>>>, mut db1: DebugOptions) -> Result<(), std::io::Error>  {
-        db1.debug_info("hello".to_string()).await;
-        let output = awriter.lock().await;
-        let stuff = std::str::from_utf8(&output).unwrap();
-        assert_eq!(stuff, "hello\n");
         Ok(())
     }
 }
