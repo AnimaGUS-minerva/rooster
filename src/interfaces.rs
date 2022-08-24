@@ -148,7 +148,6 @@ impl AllInterfaces {
             let mut ifn  = ifna.lock().await;
 
             for nlas in lm.nlas {
-                mydebug.debug_info(format!("link_info processing: {:?}", nlas)).await;
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
@@ -172,8 +171,8 @@ impl AllInterfaces {
                         for ip in inets {
                             match ip {
                                 AfSpecInet::Inet(_v4) => { },
-                                AfSpecInet::Inet6(v6) => {
-                                    mydebug.debug_info(format!("v6: {:?}", v6)).await;
+                                AfSpecInet::Inet6(_v6) => {
+                                    //mydebug.debug_info(format!("v6: {:?}", v6)).await;
                                 }
                                 _ => {}
                             }
