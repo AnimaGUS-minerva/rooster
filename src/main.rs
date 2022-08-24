@@ -23,6 +23,7 @@ use tokio::time::{sleep, Duration};
 
 pub mod debugoptions;
 pub mod interfaces;
+pub mod interface;
 pub mod args;
 
 use crate::args::RoosterOptions;

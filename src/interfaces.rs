@@ -51,37 +51,14 @@ use netlink_packet_route::link::nlas::State;
 
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
-
-pub type IfIndex = u32;
-
-pub struct Interface {
-    pub ifindex:       IfIndex,
-    pub ifname:        String,
-    pub ignored:       bool,
-    pub mtu:           u32,
-    pub linklocal6:    Ipv6Addr,
-    pub oper_state:    State
-    //pub otherstuff:    Box<>
-}
-
-impl Interface {
-    pub fn empty(ifi: IfIndex) -> Interface {
-        Interface {
-            ifindex: ifi,
-            ifname:  "".to_string(),
-            ignored: false,
-            mtu:     0,
-            linklocal6: Ipv6Addr::UNSPECIFIED,
-            oper_state: State::Down
-        }
-    }
-}
+use crate::interface::Interface;
+use crate::interface::IfIndex;
 
 pub struct AllInterfaces {
     pub debug:           DebugOptions,
-    pub interfaces:      HashMap<u32, Arc<Mutex<Interface>>>,
-    pub acp_interfaces:  HashMap<u32, Arc<Mutex<Interface>>>,
-    pub downlink_interfaces:  HashMap<u32, Arc<Mutex<Interface>>>
+    pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
+    pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
+    pub downlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
 }
 
 impl AllInterfaces {
@@ -202,14 +179,14 @@ impl AllInterfaces {
             // looks like a new device that is now up!
             if options.is_valid_acp_interface(&ifname) {
                 self.acp_interfaces.entry(ifindex).or_insert_with(|| {
-                    // ifna.start_acp();
                     ifna.clone()
                 });
+                ifn.start_acp(options, mydebug.clone()).await;
             } else if options.is_valid_downlink_interface(&ifname) {
                 self.downlink_interfaces.entry(ifindex).or_insert_with(|| {
-                    // ifna.start_download();
                     ifna.clone()
                 });
+                ifn.start_downlink(options, mydebug.clone()).await;
             } else {
                 mydebug.debug_info(format!("interface {} ignored", ifn.ifname)).await;
             }
