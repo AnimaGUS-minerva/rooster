@@ -24,7 +24,6 @@
 // list if the list is empty, otherwise, they are ignored
 //
 
-use tokio::runtime;
 use std::net::Ipv6Addr;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,7 +32,7 @@ use futures::stream::StreamExt;
 
 use rtnetlink::{
     constants::{RTMGRP_IPV6_ROUTE, RTMGRP_IPV6_IFADDR, RTMGRP_LINK},
-    Handle, Error,
+    Error,
     new_connection,
     sys::{AsyncSocket, SocketAddr},
 };
@@ -46,7 +45,7 @@ use netlink_packet_route::{
     RtnlMessage::DelRoute,
     RtnlMessage::DelAddress,
     LinkMessage, LinkHeader, AddressMessage, AddressHeader,
-    AF_INET, AF_INET6
+    AF_INET6
 
 };
 use netlink_packet_route::link::nlas::AfSpecInet;
@@ -195,7 +194,7 @@ impl AllInterfaces {
 
     pub async fn gather_addr_info(lallif: &Arc<Mutex<AllInterfaces>>, am: AddressMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
-        let mut mydebug = allif.debug.clone();
+        let _mydebug = allif.debug.clone();
 
         allif.store_addr_info(am).await;
         Ok(())
@@ -203,22 +202,22 @@ impl AllInterfaces {
 
     pub async fn gather_link_info(lallif: &Arc<Mutex<AllInterfaces>>, lm: LinkMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
-        let mut mydebug = allif.debug.clone();
+        let _mydebug = allif.debug.clone();
 
         allif.store_link_info(lm).await;
         Ok(())
     }
 
     pub async fn listen_network(lallif: &Arc<Mutex<AllInterfaces>>,
-                                options: &RoosterOptions) ->
+                                _options: &RoosterOptions) ->
         Result<tokio::task::JoinHandle<Result<(),Error>>, String>
     {
-        let mut myif = lallif.clone();
+        let myif = lallif.clone();
         let listenhandle = tokio::spawn(async move {
             println!("listening to network");
 
             // Open the netlink socket
-            let (mut connection, handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
+            let (mut connection, _handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
 
             // These flags specify what kinds of broadcast messages we want to listen for.
             let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
@@ -231,14 +230,13 @@ impl AllInterfaces {
             connection.socket_mut().socket_mut().bind(&addr).expect("failed to bind");
 
             let mut debug = {
-                let mut allif   = myif.lock().await;
+                let allif   = myif.lock().await;
                 allif.debug.clone()
             };
 
             tokio::spawn(connection);
 
             while let Some((message, _)) = messages.next().await {
-                debug.debug_info(format!("got some message")).await;
                 let payload = message.payload;
                 match payload {
                     InnerMessage(DelRoute(_stuff)) => {
@@ -331,7 +329,7 @@ pub mod tests {
 
     #[test]
     fn test_add_interface() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, mut all1) = setup_ai();
         aw!(async_add_interface(&mut all1)).unwrap();
         Ok(())
     }
@@ -341,7 +339,7 @@ pub mod tests {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 0);
         }
-        AllInterfaces::gather_addr_info(lallif, setup_am()).await;
+        AllInterfaces::gather_addr_info(lallif, setup_am()).await.unwrap();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 1);
@@ -351,7 +349,7 @@ pub mod tests {
 
     #[test]
     fn test_locked_add_interface() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, all1) = setup_ai();
         let mut lallif = Arc::new(Mutex::new(all1));
         aw!(async_locked_add_interface(&mut lallif)).unwrap();
         Ok(())
@@ -381,7 +379,7 @@ pub mod tests {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 0);
         }
-        AllInterfaces::gather_link_info(lallif, setup_lm()).await;
+        AllInterfaces::gather_link_info(lallif, setup_lm()).await.unwrap();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 1);
@@ -391,7 +389,7 @@ pub mod tests {
 
     #[test]
     fn test_locked_add_link() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, all1) = setup_ai();
         let mut lallif = Arc::new(Mutex::new(all1));
         aw!(async_locked_add_link(&mut lallif)).unwrap();
         Ok(())
@@ -415,7 +413,7 @@ pub mod tests {
         /* retrieve it and see that it kept the data */
         let lifind03 = allif.get_entry_by_ifindex(1).await;
         {
-            let mut ifind03 = lifind03.lock().await;
+            let ifind03 = lifind03.lock().await;
             assert_eq!(ifind03.ifname, "eth0".to_string());
         }
 

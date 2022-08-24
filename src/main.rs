@@ -15,7 +15,7 @@
  *
  */
 
-use tokio::runtime;
+//use tokio::runtime;
 use structopt::StructOpt;
 use std::sync::Arc;
 use futures::lock::Mutex;
@@ -43,12 +43,12 @@ async fn main() {
 
     let mut binterface = AllInterfaces::default();
     binterface.debug = debug_options;
-    let mut interface = Arc::new(Mutex::new(binterface));
+    let interface = Arc::new(Mutex::new(binterface));
 
     let listeninterface = interface.clone();
     let listenfuture  = AllInterfaces::listen_network(&listeninterface,
                                                       &mainargs);
-    listenfuture.await;
+    listenfuture.await.unwrap();
     sleep(Duration::from_millis(1000000)).await;
 }
 
