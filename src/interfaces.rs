@@ -172,7 +172,10 @@ impl AllInterfaces {
 
         // now process result values from,
         // looking for interfaces which are now up, and which
-        if old_oper_state == State::Down && new_oper_state == State::Up {
+        mydebug.debug_info(format!("ifn: {:?} old: {:?} new: {:?}",
+                                  &ifname, old_oper_state,
+                                  new_oper_state)).await;
+        if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let     ifn  = ifna.lock().await;
 
