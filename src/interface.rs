@@ -37,7 +37,13 @@ pub type IfIndex = u32;
 
 #[async_trait]
 pub trait InterfaceDaemon: Send + Sync {
-    async fn start_daemon(self: &Self, intf: Interface) -> Result<(), rtnetlink::Error>;
+    async fn start_daemon(self: &mut Self, intf: &Interface) -> Result<(), rtnetlink::Error>;
+}
+
+pub enum InterfaceType {
+    Ignored,
+    AcpUpLink,
+    JoinDownLink
 }
 
 pub struct Interface {
@@ -47,7 +53,7 @@ pub struct Interface {
     pub mtu:           u32,
     pub linklocal6:    Ipv6Addr,
     pub oper_state:    State,
-    pub daemon:        Option<Box<dyn InterfaceDaemon>>
+    pub daemon:        InterfaceType
 }
 
 impl Interface {
@@ -59,13 +65,21 @@ impl Interface {
             mtu:     0,
             linklocal6: Ipv6Addr::UNSPECIFIED,
             oper_state: State::Down,
-            daemon: None
+            daemon: InterfaceType::Ignored
         }
     }
     pub fn empty(ifi: IfIndex) -> Interface {
         let mut d = Self::default();
         d.ifindex = ifi;
         d
+    }
+
+    pub async fn start_daemon(self: &mut Self) {
+        match &self.daemon {
+            InterfaceType::Ignored      => { /* nothing to do */ },
+            InterfaceType::AcpUpLink    => { /* nothing to do */ },
+            InterfaceType::JoinDownLink => { /* nothing to do */ }
+        }
     }
 
     pub async fn start_acp(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {

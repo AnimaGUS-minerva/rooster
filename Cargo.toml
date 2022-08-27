@@ -6,13 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio         = { version = "1.7",    features = [ "macros", "io-util", "time", "process", "sync", "signal", "rt-multi-thread"] }
+socket2    = { version = "0.3", features = [ "pair", "unix", "reuseport" ] }
+nix        = { version = "0.19" }
+moz_cbor   = { git = "https://github.com/AnimaGUS-minerva/cbor-rust.git", branch = "implement-strings" }
+tokio      = { version = "1.7",    features = [ "macros", "io-util", "time", "process", "sync", "signal", "rt-multi-thread"] }
 structopt  = "0.3"
 futures    = "0.3.15"
 rtnetlink     = { version = "0.9" }
 netlink-proto = { version = "*", features = [ "tokio_socket" ] }
 netlink-packet-sock-diag = "*"
 netlink-packet-route = { version = "*" }
+custom_error  = "*"
 
 [dev-dependencies]
 tokio-test    = "0.4.2"

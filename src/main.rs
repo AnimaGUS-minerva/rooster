@@ -24,7 +24,11 @@ use tokio::time::{sleep, Duration};
 pub mod debugoptions;
 pub mod interfaces;
 pub mod interface;
+pub mod acp_interface;
 pub mod args;
+pub mod grasp;
+pub mod graspsamples;
+pub mod error;
 
 use crate::args::RoosterOptions;
 use crate::interfaces::AllInterfaces;

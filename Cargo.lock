@@ -112,6 +112,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom_error"
+version = "1.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f8a51dd197fa6ba5b4dc98a990a43cc13693c23eb0089ebb0fcc1f04152bca6"
+
+[[package]]
 name = "futures"
 version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -267,6 +273,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "moz_cbor"
+version = "0.1.2"
+source = "git+https://github.com/AnimaGUS-minerva/cbor-rust.git?branch=implement-strings#0d63ede0e20b12675b6a5c803bded8a9070f2ced"
+
+[[package]]
 name = "netlink-packet-core"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,6 +374,18 @@ dependencies = [
 
 [[package]]
 name = "nix"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2ccba0cfe4fdf15982d1674c69b1fd80bad427d293849982668dfe454bd61f2"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
+name = "nix"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4916f159ed8e5de0082076562152a76b7a1f64a01fd9d1e0fea002c37624faf"
@@ -455,11 +478,15 @@ name = "rooster"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "custom_error",
  "futures",
+ "moz_cbor",
  "netlink-packet-route",
  "netlink-packet-sock-diag",
  "netlink-proto 0.10.0",
+ "nix 0.19.1",
  "rtnetlink",
+ "socket2 0.3.19",
  "structopt",
  "tokio",
  "tokio-test",
@@ -475,7 +502,7 @@ dependencies = [
  "log",
  "netlink-packet-route",
  "netlink-proto 0.9.2",
- "nix",
+ "nix 0.22.3",
  "thiserror",
  "tokio",
 ]
@@ -503,6 +530,17 @@ name = "smallvec"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
+
+[[package]]
+name = "socket2"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "122e570113d28d773067fab24266b66753f6ea915758651696b6e35e49f88d6e"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "socket2"
@@ -599,7 +637,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.4.4",
  "tokio-macros",
  "winapi",
 ]
