@@ -25,6 +25,7 @@
 //
 
 use std::net::Ipv6Addr;
+use async_trait::async_trait;
 
 use netlink_packet_route::link::nlas::State;
 
@@ -34,14 +35,19 @@ use crate::args::RoosterOptions;
 
 pub type IfIndex = u32;
 
+#[async_trait]
+pub trait InterfaceDaemon: Send + Sync {
+    async fn start_daemon(self: &Self, intf: Interface) -> Result<(), rtnetlink::Error>;
+}
+
 pub struct Interface {
     pub ifindex:       IfIndex,
     pub ifname:        String,
     pub ignored:       bool,
     pub mtu:           u32,
     pub linklocal6:    Ipv6Addr,
-    pub oper_state:    State
-    //pub otherstuff:    Box<>
+    pub oper_state:    State,
+    pub daemon:        Option<Box<dyn InterfaceDaemon>>
 }
 
 impl Interface {
@@ -52,7 +58,8 @@ impl Interface {
             ignored: false,
             mtu:     0,
             linklocal6: Ipv6Addr::UNSPECIFIED,
-            oper_state: State::Down
+            oper_state: State::Down,
+            daemon: None
         }
     }
     pub fn empty(ifi: IfIndex) -> Interface {
@@ -71,6 +78,7 @@ impl Interface {
         mydebug.debug_info(format!("starting JoinProxy announcer on downlink interface {}", self.ifname)).await;
     }
 }
+
 
 #[cfg(test)]
 pub mod tests {
