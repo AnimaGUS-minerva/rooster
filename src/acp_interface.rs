@@ -28,7 +28,6 @@
 
 extern crate moz_cbor as cbor;
 
-use async_trait::async_trait;
 use netlink_packet_route::link::nlas::State;
 use std::net::Ipv6Addr;
 use tokio::net::UdpSocket;
@@ -46,7 +45,6 @@ use cbor::decoder::decode as cbor_decode;
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::InterfaceType;
-use crate::interface::InterfaceDaemon;
 use crate::interface::IfIndex;
 use crate::grasp;
 use crate::grasp::GraspMessage;
@@ -124,10 +122,7 @@ impl AcpInterfaceDaemon {
             interface: None
         }
     }
-}
 
-#[async_trait]
-impl InterfaceDaemon for AcpInterfaceDaemon {
     async fn start_daemon(self: &mut Self, ifn: &Interface) -> Result<(), rtnetlink::Error> {
 
         let ai = AcpInterface::open_grasp_port(ifn.ifindex).await.unwrap();
@@ -206,7 +201,7 @@ pub mod tests {
         };
     }
 
-    fn setup_ifn(aifn: AcpInterfaceDaemon) -> Interface {
+    fn setup_ifn(_aifn: AcpInterfaceDaemon) -> Interface {
         let mut ifn = Interface::default();
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();

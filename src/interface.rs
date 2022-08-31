@@ -25,7 +25,6 @@
 //
 
 use std::net::Ipv6Addr;
-use async_trait::async_trait;
 
 use netlink_packet_route::link::nlas::State;
 
@@ -34,11 +33,6 @@ use crate::args::RoosterOptions;
 //use crate::interfaces::AllInterfaces;
 
 pub type IfIndex = u32;
-
-#[async_trait]
-pub trait InterfaceDaemon: Send + Sync {
-    async fn start_daemon(self: &mut Self, intf: &Interface) -> Result<(), rtnetlink::Error>;
-}
 
 pub enum InterfaceType {
     Ignored,
