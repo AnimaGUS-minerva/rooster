@@ -28,7 +28,7 @@
 
 extern crate moz_cbor as cbor;
 
-use netlink_packet_route::link::nlas::State;
+//use netlink_packet_route::link::nlas::State;
 use std::net::Ipv6Addr;
 use tokio::net::UdpSocket;
 //use std::io::Error;
@@ -44,12 +44,12 @@ use cbor::decoder::decode as cbor_decode;
 //use crate::debugoptions::DebugOptions;
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
-use crate::interface::InterfaceType;
+//use crate::interface::InterfaceType;
 use crate::interface::IfIndex;
 use crate::grasp;
 use crate::grasp::GraspMessage;
 
-struct AcpInterface {
+pub struct AcpInterface {
     pub sock: UdpSocket
 }
 
@@ -110,25 +110,13 @@ impl AcpInterface {
             }
         }
     }
-}
 
-pub struct AcpInterfaceDaemon {
-    interface: Option<Arc<Mutex<AcpInterface>>>
-}
-
-impl AcpInterfaceDaemon {
-    pub fn default() -> AcpInterfaceDaemon {
-        AcpInterfaceDaemon {
-            interface: None
-        }
-    }
-
-    async fn start_daemon(self: &mut Self, ifn: &Interface) -> Result<(), rtnetlink::Error> {
+    pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
 
         let ai = AcpInterface::open_grasp_port(ifn.ifindex).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
-        self.interface = Some(ail.clone());
+        let ai2 = ail.clone();
 
         // ail gets moved into the async loop
 
@@ -184,7 +172,7 @@ impl AcpInterfaceDaemon {
 
         });
 
-        Ok(())
+        Ok(ai2)
     }
 
 }
@@ -201,28 +189,27 @@ pub mod tests {
         };
     }
 
-    fn setup_ifn(_aifn: AcpInterfaceDaemon) -> Interface {
+    fn setup_ifn() -> Interface {
         let mut ifn = Interface::default();
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
-        ifn.daemon = InterfaceType::AcpUpLink;
+        ifn.daemon = InterfaceType::Ignored;
         ifn
     }
 
-    async fn async_start_acp(aifn: AcpInterfaceDaemon) -> Result<(), std::io::Error> {
-        let mut ifn = setup_ifn(aifn);
-        ifn.start_daemon().await;
+    async fn async_start_acp() -> Result<(), std::io::Error> {
+        let     ifn = setup_ifn();
+        AcpInterface::start_daemon(&ifn).await.unwrap();
         Ok(())
     }
 
     #[test]
     fn test_start_acp() -> Result<(), std::io::Error> {
         //let (_awriter, mut all1) = setup_ai();
-        let aifn = AcpInterfaceDaemon::default();
-        aw!(async_start_acp(aifn)).unwrap();
+        aw!(async_start_acp()).unwrap();
         Ok(())
     }
 

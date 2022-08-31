@@ -177,7 +177,7 @@ impl AllInterfaces {
                                   new_oper_state)).await;
         if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
-            let     ifn  = ifna.lock().await;
+            let mut ifn  = ifna.lock().await;
 
             // looks like a new device that is now up!
             if options.is_valid_acp_interface(&ifname) {

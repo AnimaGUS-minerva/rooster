@@ -27,16 +27,18 @@
 use std::net::Ipv6Addr;
 
 use netlink_packet_route::link::nlas::State;
+use std::sync::Arc;
+use futures::lock::Mutex;
 
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
-//use crate::interfaces::AllInterfaces;
+use crate::acp_interface::AcpInterface;
 
 pub type IfIndex = u32;
 
 pub enum InterfaceType {
     Ignored,
-    AcpUpLink,
+    AcpUpLink { acp_daemon: Arc<Mutex<AcpInterface>> },
     JoinDownLink
 }
 
@@ -68,17 +70,12 @@ impl Interface {
         d
     }
 
-    pub async fn start_daemon(self: &mut Self) {
-        match &self.daemon {
-            InterfaceType::Ignored      => { /* nothing to do */ },
-            InterfaceType::AcpUpLink    => { /* nothing to do */ },
-            InterfaceType::JoinDownLink => { /* nothing to do */ }
-        }
-    }
-
-    pub async fn start_acp(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
+    pub async fn start_acp(self: &mut Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
 
         mydebug.debug_info(format!("starting Registrar listener on ACP interface {}", self.ifname)).await;
+        self.daemon = InterfaceType::AcpUpLink {
+            acp_daemon: AcpInterface::start_daemon(&self).await.unwrap()
+        };
     }
 
     pub async fn start_downlink(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
