@@ -28,7 +28,6 @@
 
 extern crate moz_cbor as cbor;
 
-//use netlink_packet_route::link::nlas::State;
 use std::net::Ipv6Addr;
 use tokio::net::UdpSocket;
 //use std::io::Error;
@@ -44,7 +43,6 @@ use cbor::decoder::decode as cbor_decode;
 //use crate::debugoptions::DebugOptions;
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
-//use crate::interface::InterfaceType;
 use crate::interface::IfIndex;
 use crate::grasp;
 use crate::grasp::GraspMessage;
@@ -181,6 +179,8 @@ impl AcpInterface {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use netlink_packet_route::link::nlas::State;
+    use crate::interface::InterfaceType;
 
     #[allow(unused_macros)]
     macro_rules! aw {
