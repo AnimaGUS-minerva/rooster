@@ -269,6 +269,8 @@ impl AllInterfaces {
             // thus new message broadcasts can be received.
             connection.socket_mut().socket_mut().bind(&addr).expect("failed to bind");
 
+            AllInterfaces::initial_scan_interfaces(&handle, &myif, &myoptions, &mut debug).await;
+
             tokio::spawn(connection);
 
             debug.debug_info("scanning existing interfaces".to_string()).await;
