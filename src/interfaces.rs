@@ -229,8 +229,9 @@ impl AllInterfaces {
                                           debug:   &DebugOptions) -> Result<(), Error> {
 
         let mut list = handle.link().get().execute();
-
         let mut cnt: u32 = 0;
+
+        debug.debug_info(format!("scanning existing interfaces")).await;
 
         while let Some(link) = list.try_next().await.unwrap() {
             debug.debug_info(format!("scan message {}", cnt)).await;
