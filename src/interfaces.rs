@@ -16,11 +16,11 @@
  */
 
 // this module listens for interfaces and then sorts them into three lists
-// according to the provided list of acp interfaces, downlink interfaces, and
+// according to the provided list of acp interfaces, joinlink interfaces, and
 // interfacs to ignore.
 // The lists may include glob(1) wildcards.
 //
-// Interfaces which match none of the lists are placed into the downlink interface
+// Interfaces which match none of the lists are placed into the joinlink interface
 // list if the list is empty, otherwise, they are ignored
 //
 
@@ -58,7 +58,7 @@ pub struct AllInterfaces {
     pub debug:           DebugOptions,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
-    pub downlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
+    pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
 }
 
 impl AllInterfaces {
@@ -67,7 +67,7 @@ impl AllInterfaces {
             debug:      DebugOptions::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
-            downlink_interfaces: HashMap::new()
+            joinlink_interfaces: HashMap::new()
         }
     }
 
@@ -185,11 +185,11 @@ impl AllInterfaces {
                     ifna.clone()
                 });
                 ifn.start_acp(options, mydebug.clone()).await;
-            } else if options.is_valid_downlink_interface(&ifname) {
-                self.downlink_interfaces.entry(ifindex).or_insert_with(|| {
+            } else if options.is_valid_joinlink_interface(&ifname) {
+                self.joinlink_interfaces.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
-                ifn.start_downlink(options, mydebug.clone()).await;
+                ifn.start_joinlink(options, mydebug.clone()).await;
             } else {
                 mydebug.debug_info(format!("interface {} ignored", ifn.ifname)).await;
             }

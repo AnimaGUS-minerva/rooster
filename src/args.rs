@@ -32,9 +32,9 @@ pub struct RoosterOptions {
     #[structopt(long="--acp-interface")]
     acp_interfaces: Vec<String>,
 
-    /// list of interfaces that should be downlink interfaces
-    #[structopt(long="--downlink-interface")]
-    downlink_interfaces: Vec<String>,
+    /// list of interfaces that should be joinlink interfaces
+    #[structopt(long="--joinlink-interface")]
+    joinlink_interfaces: Vec<String>,
 }
 
 impl RoosterOptions {

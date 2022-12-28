@@ -78,7 +78,7 @@ impl Interface {
         };
     }
 
-    pub async fn start_downlink(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
+    pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on downlink interface {}", self.ifname)).await;
     }

@@ -16,11 +16,11 @@
  */
 
 // this module listens for interfaces and then sorts them into three lists
-// according to the provided list of acp interfaces, downlink interfaces, and
+// according to the provided list of acp interfaces, joinlink interfaces, and
 // interfacs to ignore.
 // The lists may include glob(1) wildcards.
 //
-// Interfaces which match none of the lists are placed into the downlink interface
+// Interfaces which match none of the lists are placed into the joinlink interface
 // list if the list is empty, otherwise, they are ignored
 //
 
