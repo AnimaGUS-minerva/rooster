@@ -33,6 +33,7 @@ use futures::lock::Mutex;
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::acp_interface::AcpInterface;
+use crate::interfaces::AllInterfaces;
 
 pub type IfIndex = u32;
 
@@ -43,6 +44,7 @@ pub enum InterfaceType {
 }
 
 pub struct Interface {
+    pub debug:         Arc<DebugOptions>,
     pub ifindex:       IfIndex,
     pub ifname:        String,
     pub ignored:       bool,
@@ -53,8 +55,9 @@ pub struct Interface {
 }
 
 impl Interface {
-    pub fn default() -> Interface {
+    pub fn default(debug: Arc<DebugOptions>) -> Interface {
         Interface {
+            debug:   debug.clone(),
             ifindex: 0,
             ifname:  "".to_string(),
             ignored: false,
@@ -64,13 +67,13 @@ impl Interface {
             daemon: InterfaceType::Ignored
         }
     }
-    pub fn empty(ifi: IfIndex) -> Interface {
-        let mut d = Self::default();
+    pub fn empty(ifi: IfIndex, debug: Arc<DebugOptions>) -> Interface {
+        let mut d = Self::default(debug);
         d.ifindex = ifi;
         d
     }
 
-    pub async fn start_acp(self: &mut Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
+    pub async fn start_acp(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting Registrar listener on ACP interface {}", self.ifname)).await;
         self.daemon = InterfaceType::AcpUpLink {
@@ -78,7 +81,7 @@ impl Interface {
         };
     }
 
-    pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
+    pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
         //self.daemon = InterfaceType::JoinLink {
@@ -104,10 +107,21 @@ pub mod tests {
         Ok(())
     }
 
+    fn setup_ai() -> (Arc<Mutex<Vec<u8>>>, AllInterfaces) {
+        let writer: Vec<u8> = vec![];
+        let awriter = Arc::new(Mutex::new(writer));
+        let db1 = DebugOptions { debug_interfaces: true,
+                                 debug_output: awriter.clone() };
+        let mut all1 = AllInterfaces::default();
+        all1.debug = Arc::new(db1);
+
+        (awriter, all1)
+    }
+
     #[test]
     fn test_start_acp() -> Result<(), std::io::Error> {
-        //let (_awriter, mut all1) = setup_ai();
-        let mut ifn = Interface::empty(1);
+        let (awriter, mut all1) = setup_ai();
+        let mut ifn = Interface::empty(1, all1.debug);
         aw!(async_start_acp(&mut ifn)).unwrap();
         Ok(())
     }

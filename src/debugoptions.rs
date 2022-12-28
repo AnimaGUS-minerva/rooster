@@ -34,12 +34,18 @@ impl DebugOptions {
         }
     }
 
-    pub async fn debug_info(self: &mut Self,
-                            msg: String) {
+    pub async fn debug_verbose(self: &Self,
+                               msg: String) {
         if self.debug_interfaces {
             let mut output = self.debug_output.lock().await;
-            writeln!(output, "{}", msg).unwrap();
+            writeln!(output, "D: {}", msg).unwrap();
         }
+    }
+
+    pub async fn debug_info(self: &Self,
+                            msg: String) {
+        let mut output = self.debug_output.lock().await;
+        writeln!(output, "I: {}", msg).unwrap();
     }
 }
 
@@ -58,7 +64,7 @@ pub mod tests {
         db1.debug_info("hello".to_string()).await;
         let output = awriter.lock().await;
         let stuff = std::str::from_utf8(&output).unwrap();
-        assert_eq!(stuff, "hello\n");
+        assert_eq!(stuff, "I: hello\n");
         Ok(())
     }
 

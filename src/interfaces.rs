@@ -55,7 +55,7 @@ use crate::interface::Interface;
 use crate::interface::IfIndex;
 
 pub struct AllInterfaces {
-    pub debug:           DebugOptions,
+    pub debug:           Arc<DebugOptions>,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
@@ -64,7 +64,7 @@ pub struct AllInterfaces {
 impl AllInterfaces {
     pub fn default() -> AllInterfaces {
         return AllInterfaces {
-            debug:      DebugOptions::default(),
+            debug:      Arc::new(DebugOptions::default()),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
             joinlink_interfaces: HashMap::new()
@@ -72,7 +72,9 @@ impl AllInterfaces {
     }
 
     pub async fn get_entry_by_ifindex<'a>(self: &'a mut AllInterfaces, ifindex: IfIndex) -> Arc<Mutex<Interface>> {
-        let ifnl = self.interfaces.entry(ifindex).or_insert_with(|| { Arc::new(Mutex::new(Interface::empty(ifindex)))});
+        let ifnl = self.interfaces.entry(ifindex).or_insert_with(|| {
+            Arc::new(Mutex::new(Interface::empty(ifindex, self.debug.clone())))
+        });
         return ifnl.clone();
     }
 
@@ -80,11 +82,11 @@ impl AllInterfaces {
     pub async fn store_addr_info<'a>(self: &'a mut AllInterfaces,
                                      _options: &RoosterOptions,
                                      am: AddressMessage) {
-        let mut mydebug = self.debug.clone();
+        let mydebug = self.debug.clone();
         let lh = am.header;
         let ifindex = lh.index;
 
-        mydebug.debug_info(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
+        mydebug.debug_verbose(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
 
         let     ifna = self.get_entry_by_ifindex(ifindex).await;
         let mut ifn  = ifna.lock().await;
@@ -105,22 +107,22 @@ impl AllInterfaces {
                         continue;
                     }
                     ifn.linklocal6 = llv6;
-                    mydebug.debug_info(format!("llv6: {}", ifn.linklocal6)).await;
+                    mydebug.debug_verbose(format!("llv6: {}", ifn.linklocal6)).await;
                 },
                 Nla::CacheInfo(_info) => { /* nothing */},
                 Nla::Flags(_info)     => { /* nothing */},
                 _ => {
-                    mydebug.debug_info(format!("data: {:?} ", nlas)).await;
+                    mydebug.debug_verbose(format!("data: {:?} ", nlas)).await;
                 }
             }
         }
-        mydebug.debug_info(format!("")).await;
+        mydebug.debug_verbose(format!("")).await;
     }
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
                                      options: &RoosterOptions,
                                      lm: LinkMessage) {
-        let mut mydebug = self.debug.clone();
+        let mydebug = self.debug.clone();
         let lh = lm.header;
         let ifindex = lh.index;
 
@@ -134,19 +136,19 @@ impl AllInterfaces {
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
-                        mydebug.debug_info(format!("ifname: {}", name)).await;
+                        mydebug.debug_verbose(format!("ifname: {}", name)).await;
                         ifn.ifname = name;
                     },
                     Nla::Mtu(bytes) => {
-                        mydebug.debug_info(format!("mtu: {}", bytes)).await;
+                        mydebug.debug_verbose(format!("mtu: {}", bytes)).await;
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_info(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
+                        mydebug.debug_verbose(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
-                            mydebug.debug_info(format!("device is up")).await;
+                            mydebug.debug_verbose(format!("device is up")).await;
                         }
                         ifn.oper_state = state;
                     },
@@ -155,7 +157,7 @@ impl AllInterfaces {
                             match ip {
                                 AfSpecInet::Inet(_v4) => { },
                                 AfSpecInet::Inet6(_v6) => {
-                                    //mydebug.debug_info(format!("v6: {:?}", v6)).await;
+                                    //mydebug.debug_verbose(format!("v6: {:?}", v6)).await;
                                 }
                                 _ => {}
                             }
@@ -166,13 +168,13 @@ impl AllInterfaces {
                     }
                 }
             }
-            mydebug.debug_info(format!("")).await;
+            mydebug.debug_verbose(format!("")).await;
             (old_oper_state, ifn.oper_state, ifn.ifname.clone())
         };
 
         // now process result values from,
         // looking for interfaces which are now up, and which
-        mydebug.debug_info(format!("ifn: {:?} old: {:?} new: {:?}",
+        mydebug.debug_verbose(format!("ifn: {:?} old: {:?} new: {:?}",
                                   &ifname, old_oper_state,
                                   new_oper_state)).await;
         if old_oper_state != State::Up && new_oper_state == State::Up {
@@ -230,6 +232,11 @@ impl AllInterfaces {
 
             // Open the netlink socket
             let (mut connection, _handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
+
+            let debug = {
+                let allif   = myif.lock().await;
+                allif.debug.clone()
+            };
 
             // These flags specify what kinds of broadcast messages we want to listen for.
             let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
@@ -313,7 +320,7 @@ pub mod tests {
         let db1 = DebugOptions { debug_interfaces: true,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
-        all1.debug = db1;
+        all1.debug = Arc::new(db1);
 
         (awriter, all1)
     }

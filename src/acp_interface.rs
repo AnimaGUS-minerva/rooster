@@ -46,9 +46,11 @@ use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::grasp;
 use crate::grasp::GraspMessage;
+use crate::interfaces::AllInterfaces;
+use crate::debugoptions::DebugOptions;
 
 pub struct AcpInterface {
-    pub sock: UdpSocket
+    pub sock: UdpSocket,
 }
 
 impl AcpInterface {
@@ -189,8 +191,20 @@ pub mod tests {
         };
     }
 
+    fn setup_ai() -> (Arc<Mutex<Vec<u8>>>, AllInterfaces) {
+        let writer: Vec<u8> = vec![];
+        let awriter = Arc::new(Mutex::new(writer));
+        let db1 = DebugOptions { debug_interfaces: true,
+                                 debug_output: awriter.clone() };
+        let mut all1 = AllInterfaces::default();
+        all1.debug = Arc::new(db1);
+
+        (awriter, all1)
+    }
+
     fn setup_ifn() -> Interface {
-        let mut ifn = Interface::default();
+        let (awriter, mut all1) = setup_ai();
+        let mut ifn = Interface::default(all1.debug);
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;

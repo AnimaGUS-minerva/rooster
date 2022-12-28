@@ -25,6 +25,7 @@ pub mod debugoptions;
 pub mod interfaces;
 pub mod interface;
 pub mod acp_interface;
+pub mod join_interface;
 pub mod args;
 pub mod grasp;
 pub mod graspsamples;
@@ -45,9 +46,10 @@ async fn main() {
     if mainargs.debug_graspmessages {
         debug_options.debug_interfaces = true;
     }
+    println!("Debug Interfaces is {}", debug_options.debug_interfaces);
 
     let mut binterface = AllInterfaces::default();
-    binterface.debug = debug_options;
+    binterface.debug = Arc::new(debug_options);
     let interface = Arc::new(Mutex::new(binterface));
 
     let listeninterface = interface.clone();
