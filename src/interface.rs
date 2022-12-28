@@ -16,11 +16,11 @@
  */
 
 // this module listens for interfaces and then sorts them into three lists
-// according to the provided list of acp interfaces, downlink interfaces, and
+// according to the provided list of acp interfaces, joinlink interfaces, and
 // interfacs to ignore.
 // The lists may include glob(1) wildcards.
 //
-// Interfaces which match none of the lists are placed into the downlink interface
+// Interfaces which match none of the lists are placed into the joinlink interface
 // list if the list is empty, otherwise, they are ignored
 //
 
@@ -39,7 +39,7 @@ pub type IfIndex = u32;
 pub enum InterfaceType {
     Ignored,
     AcpUpLink { acp_daemon: Arc<Mutex<AcpInterface>> },
-    JoinDownLink
+    JoinLink
 }
 
 pub struct Interface {
@@ -80,7 +80,11 @@ impl Interface {
 
     pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mut mydebug: DebugOptions) {
 
-        mydebug.debug_info(format!("starting JoinProxy announcer on downlink interface {}", self.ifname)).await;
+        mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
+        //self.daemon = InterfaceType::JoinLink {
+        //    join_daemon: JoinInterface::start_daemon(&self).await.unwrap()
+        //};
+
     }
 }
 

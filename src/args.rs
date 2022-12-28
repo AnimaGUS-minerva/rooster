@@ -43,7 +43,7 @@ impl RoosterOptions {
             debug_graspmessages: true,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
-            downlink_interfaces: vec![]
+            joinlink_interfaces: vec![]
         }
     }
 
@@ -52,25 +52,25 @@ impl RoosterOptions {
             return false;
         }
 
-        // must explicitely mentioned, otherwise, it is a downlink interface
+        // must explicitely mentioned, otherwise, it is a joinlink interface
         if self.acp_interfaces.contains(ifname) {
             return true;
         }
         return false;
     }
 
-    pub fn is_valid_downlink_interface(self: &Self, ifname: &String) -> bool {
+    pub fn is_valid_joinlink_interface(self: &Self, ifname: &String) -> bool {
         if self.ignored_interfaces.contains(ifname) {
             return false;
         }
 
         // if it is mentioned, then consider it spoken for
-        if self.downlink_interfaces.contains(ifname) {
+        if self.joinlink_interfaces.contains(ifname) {
             return true;
         }
 
         // otherwise, if the list is empty, then it is automatically chosen
-        if self.downlink_interfaces.is_empty() {
+        if self.joinlink_interfaces.is_empty() {
             return true;
         }
         return false;
@@ -88,7 +88,7 @@ pub mod tests {
             RoosterOptions {
                 debug_graspmessages: true,
                 ignored_interfaces: vec![], acp_interfaces: vec![],
-                downlink_interfaces: vec![]
+                joinlink_interfaces: vec![]
             });
         Ok(())
     }
@@ -99,7 +99,9 @@ pub mod tests {
             RoosterOptions::from_iter_safe(&["rooster","--acp-interface=eth0"]).unwrap(),
             RoosterOptions {
                 debug_graspmessages: false,
-                ignored_interfaces: vec![], acp_interfaces: vec!["eth0".to_string()], downlink_interfaces: vec![]
+                ignored_interfaces: vec![],
+                acp_interfaces: vec!["eth0".to_string()],
+                joinlink_interfaces: vec![]
             });
         Ok(())
     }
@@ -115,7 +117,7 @@ pub mod tests {
                 debug_graspmessages: false,
                 ignored_interfaces: vec![],
                 acp_interfaces: vec!["eth0".to_string(),"eth1".to_string()],
-                downlink_interfaces: vec![]
+                joinlink_interfaces: vec![]
             });
         Ok(())
     }
@@ -133,23 +135,23 @@ pub mod tests {
             debug_graspmessages: false,
             ignored_interfaces: vec!["eth0".to_string()],
             acp_interfaces: vec![],
-            downlink_interfaces: vec!["eth0".to_string()]
+            joinlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface(&"eth0".to_string()), false);
+        assert_eq!(ro1.is_valid_joinlink_interface(&"eth0".to_string()), false);
         assert_eq!(ro1.is_valid_acp_interface(&"eth0".to_string()), false);
-        assert_eq!(ro1.is_valid_downlink_interface(&"eth1".to_string()), false);
+        assert_eq!(ro1.is_valid_joinlink_interface(&"eth1".to_string()), false);
         Ok(())
     }
 
     #[test]
-    fn test_eth0_is_downlink() -> Result<(), std::io::Error> {
+    fn test_eth0_is_joinlink() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec![],
-            downlink_interfaces: vec!["eth0".to_string()]
+            joinlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface(&"eth0".to_string()), true);
+        assert_eq!(ro1.is_valid_joinlink_interface(&"eth0".to_string()), true);
         assert_eq!(ro1.is_valid_acp_interface(&"eth0".to_string()), false);
         Ok(())
     }
@@ -160,22 +162,22 @@ pub mod tests {
             debug_graspmessages: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec!["eth2".to_string()],
-            downlink_interfaces: vec!["eth0".to_string()]
+            joinlink_interfaces: vec!["eth0".to_string()]
         };
-        assert_eq!(ro1.is_valid_downlink_interface(&"eth2".to_string()), false);
+        assert_eq!(ro1.is_valid_joinlink_interface(&"eth2".to_string()), false);
         assert_eq!(ro1.is_valid_acp_interface(&"eth2".to_string()), true);
         Ok(())
     }
 
     #[test]
-    fn test_eth0_is_implicit_downlink() -> Result<(), std::io::Error> {
+    fn test_eth0_is_implicit_joinlink() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
-            downlink_interfaces: vec![]
+            joinlink_interfaces: vec![]
         };
-        assert_eq!(ro1.is_valid_downlink_interface(&"eth2".to_string()), true);
+        assert_eq!(ro1.is_valid_joinlink_interface(&"eth2".to_string()), true);
         assert_eq!(ro1.is_valid_acp_interface(&"eth2".to_string()), false);
         Ok(())
     }
