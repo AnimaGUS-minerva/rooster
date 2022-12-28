@@ -25,6 +25,7 @@ pub mod debugoptions;
 pub mod interfaces;
 pub mod interface;
 pub mod acp_interface;
+pub mod join_interface;
 pub mod args;
 pub mod grasp;
 pub mod graspsamples;
