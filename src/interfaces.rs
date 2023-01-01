@@ -254,7 +254,7 @@ impl AllInterfaces {
             // Open the netlink socket
             let (mut connection, handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
 
-            let mut debug = {
+            let debug = {
                 let allif   = myif.lock().await;
                 allif.debug.clone()
             };
