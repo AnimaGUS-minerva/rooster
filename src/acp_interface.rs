@@ -133,7 +133,9 @@ impl AcpInterface {
                 let results = {
                     let ai = ail.lock().await;
                     println!("listening on GRASP socket {:?}", ai.sock);
-                    ai.sock.recv_from(&mut bufbytes).await
+                    let res = ai.sock.recv_from(&mut bufbytes).await;
+                    println!("got answer from GRASP socket {:?}", ai.sock);
+                    res
                 };
 
                 match results {
