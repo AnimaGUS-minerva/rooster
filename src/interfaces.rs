@@ -29,9 +29,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
+use futures::TryStreamExt;
 
 use rtnetlink::{
     constants::{RTMGRP_IPV6_ROUTE, RTMGRP_IPV6_IFADDR, RTMGRP_LINK},
+    Handle,
     Error,
     new_connection,
     sys::{AsyncSocket, SocketAddr},
@@ -221,17 +223,41 @@ impl AllInterfaces {
         Ok(())
     }
 
+    pub async fn scan_existing_interfaces(lallif: &Arc<Mutex<AllInterfaces>>,
+                                          options: &RoosterOptions,
+                                          handle:  &Handle,
+                                          debug:   &DebugOptions) -> Result<(), Error> {
+
+        let mut list = handle.link().get().execute();
+
+        let mut cnt: u32 = 0;
+
+        while let Some(link) = list.try_next().await.unwrap() {
+            debug.debug_info(format!("scan message {}", cnt)).await;
+            AllInterfaces::gather_link_info(&lallif,
+                                            &options,
+                                            link).await.unwrap();
+            cnt += 1;
+        }
+        Ok(())
+    }
+
     pub async fn listen_network(lallif: &Arc<Mutex<AllInterfaces>>,
                                 options: &RoosterOptions) ->
         Result<tokio::task::JoinHandle<Result<(),Error>>, String>
     {
         let myif = lallif.clone();
         let myoptions = options.clone();
+
         let listenhandle = tokio::spawn(async move {
-            println!("listening to network");
 
             // Open the netlink socket
-            let (mut connection, _handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
+            let (mut connection, handle, mut messages) = new_connection().map_err(|e| format!("{}", e)).unwrap();
+
+            let mut debug = {
+                let allif   = myif.lock().await;
+                allif.debug.clone()
+            };
 
             // These flags specify what kinds of broadcast messages we want to listen for.
             let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
@@ -243,12 +269,10 @@ impl AllInterfaces {
             // thus new message broadcasts can be received.
             connection.socket_mut().socket_mut().bind(&addr).expect("failed to bind");
 
-            let mut debug = {
-                let allif   = myif.lock().await;
-                allif.debug.clone()
-            };
-
             tokio::spawn(connection);
+
+            debug.debug_info("scanning existing interfaces".to_string()).await;
+            AllInterfaces::scan_existing_interfaces(&myif, &myoptions, &handle, &debug).await?;
 
             while let Some((message, _)) = messages.next().await {
                 let payload = message.payload;
@@ -280,7 +304,7 @@ impl AllInterfaces {
                     }
                     //_ => { println!("generic message type: {} skipped", payload.message_type()); }
                     _ => {
-                        debug.debug_info(format!("msg type: {:?}", payload)).await;
+                        debug.debug_verbose(format!("msg type: {:?}", payload)).await;
                     }
                 }
             };
