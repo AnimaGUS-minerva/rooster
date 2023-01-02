@@ -48,19 +48,22 @@ use crate::grasp;
 use crate::grasp::GraspMessage;
 use crate::interfaces::AllInterfaces;
 use crate::debugoptions::DebugOptions;
+use crate::grasp::GraspMessageType;
 
 pub struct AcpInterface {
     pub sock: UdpSocket,
+    pub debug: Arc<DebugOptions>
 }
 
 impl AcpInterface {
-    pub fn default(sock: UdpSocket) -> AcpInterface {
+    pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>) -> AcpInterface {
         AcpInterface {
-            sock: sock
+            sock, debug
         }
     }
 
-    pub async fn open_grasp_port(ifindex: IfIndex) -> Result<AcpInterface, std::io::Error> {
+    pub async fn open_grasp_port(ifn: &Interface,
+                                 ifindex: IfIndex) -> Result<AcpInterface, std::io::Error> {
         use socket2::{Socket, Domain, Type};
 
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
@@ -82,11 +85,7 @@ impl AcpInterface {
                 let grasp_mcast = "FF02:0:0:0:0:0:0:13".parse::<Ipv6Addr>().unwrap();
                 recv.join_multicast_v6(&grasp_mcast, ifindex).unwrap();
 
-                let ssin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
-                                              0 as u16, 0, ifindex);
-
-                let sock = UdpSocket::bind(ssin6).await.unwrap();
-                return Ok(AcpInterface::default(sock));
+                return Ok(AcpInterface::default(recv, ifn.debug.clone()));
             },
             Err(err) => {
                 if err.kind() == ErrorKind::AddrInUse {
@@ -111,9 +110,24 @@ impl AcpInterface {
         }
     }
 
+    pub async fn registrar_announce(self: &AcpInterface, cnt: u32, graspmessage: GraspMessage) {
+        // now we have a graspmessage which we'll do something with!
+        println!("{} grasp mflood: {:?}", cnt, graspmessage);
+
+    }
+
+    pub async fn announce(self: &AcpInterface, cnt: u32, graspmessage: GraspMessage) {
+        // now we have a graspmessage which we'll do something with!
+        println!("{} grasp message: {:?}", cnt, graspmessage);
+
+        if graspmessage.mtype == GraspMessageType::M_FLOOD {
+            self.registrar_announce(cnt, graspmessage).await;
+        }
+    }
+
     pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
 
-        let ai = AcpInterface::open_grasp_port(ifn.ifindex).await.unwrap();
+        let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
         let ai2 = ail.clone();
@@ -130,41 +144,42 @@ impl AcpInterface {
                 //}
 
                 // lock it, read from it and return result
-                let results = {
+                let (results,debug) = {
                     let ai = ail.lock().await;
-                    println!("listening on GRASP socket {:?}", ai.sock);
+                    //println!("listening on GRASP socket {:?}", ai.sock);
                     let res = ai.sock.recv_from(&mut bufbytes).await;
-                    println!("got answer from GRASP socket {:?}", ai.sock);
-                    res
+                    let debug = ai.debug.clone();
+                    //println!("got answer from GRASP socket {:?}", ai.sock);
+                    (res,debug)
                 };
 
                 match results {
                     Ok((size, addr)) => {
-                        println!("{}: grasp daemon read: {} bytes from {}", cnt, size, addr);
+                        debug.debug_info(format!("{}: grasp daemon read: {} bytes from {}",
+                                                 cnt, size, addr)).await;
                         let graspmessage = match cbor_decode(&bufbytes) {
                             Ok(cbor) => {
                                 match GraspMessage::decode_grasp_message(cbor) {
                                     Ok(msg) => msg,
                                     err @ _ => {
-                                        println!("   invalid grasp message: {:?}", err);
+                                        debug.debug_info(format!("   invalid grasp message: {:?}", err)).await;
                                         continue;
                                     }
                                 }
                             },
                             err @ _ => {
-                                println!("   invalid cbor in message: {:?}", err);
+                                debug.debug_info(format!("   invalid cbor in message: {:?}", err)).await;
                                 continue;
                             }
                         };
 
-                        // now we have a graspmessage which we'll do something with!
-                        println!("{} grasp message: {:?}", cnt, graspmessage);
-
-                        /* insert into list of possible registrars */
-                        // todo
+                         {
+                             let ai = ail.lock().await;
+                             ai.announce(cnt, graspmessage).await;
+                         }
                     }
                     Err(msg) => {
-                        println!("{} grasp read got error: {:?}", cnt, msg);
+                        debug.debug_info(format!("{} grasp read got error: {:?}", cnt, msg)).await;
                         // deal with socket closed?
                     }
                 }
@@ -185,6 +200,8 @@ pub mod tests {
     use super::*;
     use netlink_packet_route::link::nlas::State;
     use crate::interface::InterfaceType;
+    use crate::grasp::GraspObjective;
+    use crate::grasp::GraspLocator;
 
     #[allow(unused_macros)]
     macro_rules! aw {
@@ -205,7 +222,7 @@ pub mod tests {
     }
 
     fn setup_ifn() -> Interface {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, all1) = setup_ai();
         let mut ifn = Interface::default(all1.debug);
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
@@ -230,9 +247,9 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        //let ifn = setup_ifn(None);
+        let ifn = setup_ifn();
         // ifindex=1, is lo
-        let _aifn = AcpInterface::open_grasp_port(1).await.unwrap();
+        let _aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         Ok(())
     }
 
@@ -240,6 +257,35 @@ pub mod tests {
     fn test_open_socket() -> Result<(), std::io::Error> {
         //let (_awriter, mut all1) = setup_ai();
         aw!(async_open_socket()).unwrap();
+        Ok(())
+    }
+
+    async fn async_process_mflood() -> Result<(), std::io::Error> {
+        let m1= GraspMessage { mtype: GraspMessageType::M_FLOOD,
+                               session_id: 1,
+                               initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                               ttl: 180000,
+                               objectives: vec![
+                                   GraspObjective {
+                                       objective_name: "AN_join_registrar".to_string(),
+                                       objective_flags: 4, loop_count: 255,
+                                       objective_value: Some("".to_string()),
+                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                                           transport_proto: 6, port_number: 8993 }
+                                       )
+                                   }
+                               ]
+        };
+        let ifn = setup_ifn();
+        let aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        aifn.registrar_announce(1, m1).await;
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_mflood() -> Result<(), std::io::Error> {
+        aw!(async_process_mflood()).unwrap();
         Ok(())
     }
 
