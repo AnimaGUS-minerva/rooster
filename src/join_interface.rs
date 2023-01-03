@@ -25,14 +25,15 @@
 extern crate moz_cbor as cbor;
 
 use std::net::Ipv6Addr;
-use tokio::net::{UdpSocket, TcpSocket, TcpListener};
+//use tokio::net::{UdpSocket, TcpSocket, TcpListener};
+use tokio::net::{UdpSocket, TcpListener};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
 //use std::net::{SocketAddr};
 use std::sync::Arc;
 use futures::lock::Mutex;
-use tokio::process::{Command};
+//use tokio::process::{Command};
 use socket2::{Socket, Domain, Type};
 
 //use cbor::decoder::decode as cbor_decode;
@@ -41,8 +42,8 @@ use socket2::{Socket, Domain, Type};
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
-use crate::grasp;
-use crate::grasp::GraspMessage;
+//use crate::grasp;
+//use crate::grasp::GraspMessage;
 use crate::interfaces::AllInterfaces;
 use crate::debugoptions::DebugOptions;
 
@@ -54,7 +55,7 @@ pub struct JoinInterface {
 }
 
 impl JoinInterface {
-    fn open_bound_udpsocket(ifindex: IfIndex, socknum: u16) -> Result<tokio::net::UdpSocket, std::io::Error> {
+    fn open_bound_udpsocket(ifindex: IfIndex, _socknum: u16) -> Result<tokio::net::UdpSocket, std::io::Error> {
 
         /* this is an announce socket, so let kernel decide on port number */
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
@@ -177,7 +178,7 @@ pub mod tests {
     }
 
     fn setup_ifn() -> Interface {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, all1) = setup_ai();
         let mut ifn = Interface::default(all1.debug);
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();

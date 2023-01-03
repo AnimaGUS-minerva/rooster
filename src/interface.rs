@@ -120,7 +120,7 @@ pub mod tests {
 
     #[test]
     fn test_start_acp() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
+        let (_awriter, all1) = setup_ai();
         let mut ifn = Interface::empty(1, all1.debug);
         aw!(async_start_acp(&mut ifn)).unwrap();
         Ok(())
