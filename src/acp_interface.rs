@@ -29,12 +29,14 @@
 extern crate moz_cbor as cbor;
 
 use std::net::Ipv6Addr;
-use tokio::net::UdpSocket;
+use tokio::net::{UdpSocket};
 //use std::io::Error;
 use std::io::ErrorKind;
-use std::net::{SocketAddrV6};
+use std::net::{SocketAddrV6, IpAddr};
 //use std::net::{SocketAddr};
 use std::sync::Arc;
+use std::time::{SystemTime, Duration};
+
 use futures::lock::Mutex;
 use tokio::process::{Command};
 
@@ -49,16 +51,41 @@ use crate::grasp::GraspMessage;
 use crate::interfaces::AllInterfaces;
 use crate::debugoptions::DebugOptions;
 use crate::grasp::GraspMessageType;
+use crate::grasp::GraspLocator;
+
+#[derive(PartialEq)]
+pub enum RegistrarType {
+    HTTPRegistrar,
+    CoAPRegistrar,
+    StatelessCoAPRegistrar,
+}
+
+pub struct Registrar {
+    pub rtype: RegistrarType,
+    pub addr: IpAddr,
+    pub port: u16,
+    pub last_announce: SystemTime,
+    pub ttl:  Duration
+}
+
+impl Registrar {
+    pub async fn forward_socket(_incoming: UdpSocket) -> Result<(), std::io::Error> {
+        Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "failed".to_string()))
+    }
+}
 
 pub struct AcpInterface {
     pub sock: UdpSocket,
-    pub debug: Arc<DebugOptions>
+    pub debug: Arc<DebugOptions>,
+    pub registrars: Vec<Registrar>
 }
 
 impl AcpInterface {
     pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>) -> AcpInterface {
         AcpInterface {
-            sock, debug
+            sock, debug,
+            registrars: vec![]
+
         }
     }
 
@@ -110,15 +137,82 @@ impl AcpInterface {
         }
     }
 
-    pub async fn registrar_announce(self: &AcpInterface, cnt: u32, graspmessage: GraspMessage) {
-        // now we have a graspmessage which we'll do something with!
-        println!("{} grasp mflood: {:?}", cnt, graspmessage);
+    pub async fn add_registrar(self: &mut AcpInterface, _cnt: u32, rtype: RegistrarType,
+                               v6addr: Ipv6Addr, port_number: u16, ttl: Duration) {
+
+        /* look into list of registrars */
+        let mut found = self.registrars.iter_mut().find(|rm| { let r = &**rm;
+                                                               r.addr == v6addr &&
+                                                               r.port == port_number  &&
+                                                               r.rtype == rtype});
+        if let Some(ref mut r) = found {
+            r.last_announce = SystemTime::now();
+            r.ttl = ttl;
+        } else {
+            let newone = Registrar { addr: IpAddr::V6(v6addr), port: port_number,
+                                     rtype: rtype, last_announce: SystemTime::now(),
+                                     ttl: ttl };
+            self.registrars.push(newone);
+        };
+    }
+
+    pub async fn registrar_announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
+        self.debug.debug_verbose(format!("{} grasp mflood[{}] from {}", cnt,
+                                         graspmessage.session_id,
+                                         graspmessage.initiator)).await;
+
+        let mut objcnt = 1;
+        let ttl = Duration::from_millis(graspmessage.ttl.into());
+        for objective in graspmessage.objectives {
+            let objvaluestr = if let Some(ref value) = objective.objective_value {
+                value.clone()
+            } else {
+                "none".to_string()
+            };
+
+            self.debug.debug_verbose(format!("  {}.{} obj: {} ({})", cnt,
+                                             objcnt, objective.objective_name,
+                                             objvaluestr)).await;
+            if let Some(locator) = objective.locator {
+                match locator {
+                    GraspLocator::O_IPv6_LOCATOR{ v6addr, transport_proto, port_number } => {
+                        self.debug.debug_verbose(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
+                                                         transport_proto, v6addr, port_number)).await;
+                        match objective.objective_value {
+                            Some(ref value) if value == "" || value == "BRSKI" => {
+                                self.add_registrar(cnt, RegistrarType::HTTPRegistrar, v6addr,
+                                                   port_number, ttl).await
+                            },
+                            Some(ref value) if value == "BRSKI_JP" => {
+                                self.add_registrar(cnt, RegistrarType::CoAPRegistrar, v6addr,
+                                                   port_number, ttl).await
+                            },
+                            Some(ref value) if value == "BRSKI_RJP" => {
+                                self.add_registrar(cnt, RegistrarType::StatelessCoAPRegistrar,
+                                                   v6addr, port_number, ttl).await
+                            },
+                            _ => {
+                                self.debug.debug_verbose(format!("  {}.{} unknown objective value",
+                                                                 cnt, objcnt)).await;
+                                return;
+                            },
+                        }
+                    },
+                    _ => {
+                        self.debug.debug_verbose(format!("  {}.{} other-type {:?}", cnt, objcnt,
+                                                         locator)).await;
+                        return;
+                    }
+                };
+            }
+            objcnt = objcnt + 1;
+        }
 
     }
 
-    pub async fn announce(self: &AcpInterface, cnt: u32, graspmessage: GraspMessage) {
+    pub async fn announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
         // now we have a graspmessage which we'll do something with!
-        println!("{} grasp message: {:?}", cnt, graspmessage);
+        self.debug.debug_verbose(format!("{} grasp message: {:?}", cnt, graspmessage)).await;
 
         if graspmessage.mtype == GraspMessageType::M_FLOOD {
             self.registrar_announce(cnt, graspmessage).await;
@@ -126,7 +220,6 @@ impl AcpInterface {
     }
 
     pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
-
         let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
@@ -174,7 +267,7 @@ impl AcpInterface {
                         };
 
                          {
-                             let ai = ail.lock().await;
+                             let mut ai = ail.lock().await;
                              ai.announce(cnt, graspmessage).await;
                          }
                     }
@@ -191,7 +284,6 @@ impl AcpInterface {
 
         Ok(ai2)
     }
-
 }
 
 
@@ -201,7 +293,6 @@ pub mod tests {
     use netlink_packet_route::link::nlas::State;
     use crate::interface::InterfaceType;
     use crate::grasp::GraspObjective;
-    use crate::grasp::GraspLocator;
 
     #[allow(unused_macros)]
     macro_rules! aw {
@@ -278,8 +369,9 @@ pub mod tests {
                                ]
         };
         let ifn = setup_ifn();
-        let aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
+        assert_eq!(aifn.registrars.len(), 1);
         Ok(())
     }
 
