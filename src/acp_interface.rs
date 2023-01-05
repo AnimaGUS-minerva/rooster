@@ -371,7 +371,7 @@ pub mod tests {
         let ifn = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
-        assert_eq!(aifn.registrars.len(), 0);
+        assert_eq!(aifn.registrars.len(), 1);
         Ok(())
     }
 
