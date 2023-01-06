@@ -463,6 +463,12 @@ pub mod tests {
         Ok(())
     }
 
+    async fn dump_debug(awriter: Arc<Mutex<Vec<u8>>>) {
+        let output = awriter.lock().await;
+        let stuff = std::str::from_utf8(&output).unwrap();
+        println!("{}", stuff);
+    }
+
     // feed a single GRASP message containing one objecting into the mechanism, and verify that it
     // results a single registrar being processed, then feed the same announcement
     // (different session_id), and that it results in still a single entry.
@@ -480,11 +486,7 @@ pub mod tests {
         assert_eq!(aifn.registrars.len(), 1);
         aifn.dump_registrar_list().await;
 
-        {
-            let output = awriter.lock().await;
-            let stuff = std::str::from_utf8(&output).unwrap();
-            println!("{}", stuff);
-        }
+        dump_debug(awriter).await;
         Ok(())
     }
 
