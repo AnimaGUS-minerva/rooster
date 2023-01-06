@@ -166,6 +166,25 @@ impl AcpInterface {
         };
     }
 
+    pub async fn dump_registrar_list(self: &AcpInterface) {
+        let regcnt = 1;
+        self.debug.debug_verbose("List of registrars".to_string()).await;
+        for registrar in &self.registrars {
+            if registrar.rtype[RegistrarType::HTTPRegistrar as usize] != RegistrarType::NoneRegistrar {
+                self.debug.debug_verbose(format!("{} announced from [{}]:{} proto HTTP",
+                                                 regcnt, registrar.addr, registrar.port)).await;
+            }
+            if registrar.rtype[RegistrarType::CoAPRegistrar as usize] != RegistrarType::NoneRegistrar {
+                self.debug.debug_verbose(format!("{} announced from [{}]:{} proto CoAP",
+                                                 regcnt, registrar.addr, registrar.port)).await;
+            }
+            if registrar.rtype[RegistrarType::StatelessCoAPRegistrar as usize] != RegistrarType::NoneRegistrar {
+                self.debug.debug_verbose(format!("{} announced from [{}]:{} proto StatelessCoAP",
+                                                 regcnt, registrar.addr, registrar.port)).await;
+            }
+        }
+    }
+
     pub async fn registrar_announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
         self.debug.debug_verbose(format!("{} grasp mflood[{}] from {}", cnt,
                                          graspmessage.session_id,
@@ -279,6 +298,7 @@ impl AcpInterface {
                          {
                              let mut ai = ail.lock().await;
                              ai.announce(cnt, graspmessage).await;
+                             ai.dump_registrar_list().await;
                          }
                     }
                     Err(msg) => {
