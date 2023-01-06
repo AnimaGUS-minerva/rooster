@@ -400,6 +400,14 @@ pub mod tests {
             ]
         }
     }
+
+    // same as msg1, but with a different session_id
+    fn msg2() -> GraspMessage {
+        let mut m2 = msg1();
+        m2.session_id = 2;
+        m2
+    }
+
     fn msg3() -> GraspMessage {
         GraspMessage {
             mtype: GraspMessageType::M_FLOOD,
@@ -452,6 +460,37 @@ pub mod tests {
     #[test]
     fn test_process_mflood1() -> Result<(), std::io::Error> {
         aw!(async_process_mflood1()).unwrap();
+        Ok(())
+    }
+
+    // feed a single GRASP message containing one objecting into the mechanism, and verify that it
+    // results a single registrar being processed, then feed the same announcement
+    // (different session_id), and that it results in still a single entry.
+    async fn async_process_mflood2() -> Result<(), std::io::Error> {
+        let    (ifn,awriter) = setup_ifn();
+
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+
+        let m1= msg1();
+        aifn.registrar_announce(1, m1).await;
+        assert_eq!(aifn.registrars.len(), 1);
+
+        let m2= msg2();
+        aifn.registrar_announce(2, m2).await;
+        assert_eq!(aifn.registrars.len(), 1);
+        aifn.dump_registrar_list().await;
+
+        {
+            let output = awriter.lock().await;
+            let stuff = std::str::from_utf8(&output).unwrap();
+            println!("{}", stuff);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_mflood2() -> Result<(), std::io::Error> {
+        aw!(async_process_mflood2()).unwrap();
         Ok(())
     }
 
