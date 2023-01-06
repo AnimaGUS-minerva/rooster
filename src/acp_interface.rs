@@ -342,8 +342,8 @@ pub mod tests {
         (awriter, all1)
     }
 
-    fn setup_ifn() -> Interface {
-        let (_awriter, all1) = setup_ai();
+    fn setup_ifn() -> (Interface,Arc<Mutex<Vec<u8>>>) {
+        let (awriter, all1) = setup_ai();
         let mut ifn = Interface::default(all1.debug);
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
@@ -351,11 +351,11 @@ pub mod tests {
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
         ifn.daemon = InterfaceType::Ignored;
-        ifn
+        (ifn,awriter)
     }
 
     async fn async_start_acp() -> Result<(), std::io::Error> {
-        let     ifn = setup_ifn();
+        let    (ifn,_awriter) = setup_ifn();
         AcpInterface::start_daemon(&ifn).await.unwrap();
         Ok(())
     }
@@ -368,7 +368,7 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        let ifn = setup_ifn();
+        let    (ifn,_awriter) = setup_ifn();
         // ifindex=1, is lo
         let _aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         Ok(())
@@ -438,9 +438,11 @@ pub mod tests {
         }
     }
 
+    // feed a single GRASP message containing one objecting into the mechanism, and verify that it
+    // results a single registrar being processed
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= msg1();
-        let ifn = setup_ifn();
+        let    (ifn,_awriter) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
@@ -455,16 +457,34 @@ pub mod tests {
 
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
-        let ifn = setup_ifn();
+        let    (ifn,_awriter) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
-        assert_eq!(aifn.registrars.len(), 3);
+        assert_eq!(aifn.registrars.len(), 1);
         Ok(())
     }
 
     #[test]
     fn test_process_mflood3() -> Result<(), std::io::Error> {
         aw!(async_process_mflood3()).unwrap();
+        Ok(())
+    }
+
+    async fn async_process_mflood13() -> Result<(), std::io::Error> {
+        let    (ifn,_awriter) = setup_ifn();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+
+        let m1= msg1();
+        aifn.registrar_announce(1, m1).await;
+        let m3= msg3();
+        aifn.registrar_announce(1, m3).await;
+        assert_eq!(aifn.registrars.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_mflood13() -> Result<(), std::io::Error> {
+        aw!(async_process_mflood13()).unwrap();
         Ok(())
     }
 
