@@ -53,15 +53,20 @@ use crate::debugoptions::DebugOptions;
 use crate::grasp::GraspMessageType;
 use crate::grasp::GraspLocator;
 
-#[derive(PartialEq)]
+pub const BRSKI_HTTP_OBJECTIVE: &str = "BRSKI";
+pub const BRSKI_COAP_OBJECTIVE: &str = "BRSKI_JP";
+pub const BRSKI_JPY_OBJECTIVE:  &str = "BRSKI_RJP";
+
+#[derive(Copy, Clone, PartialEq)]
 pub enum RegistrarType {
+    NoneRegistrar,
     HTTPRegistrar,
     CoAPRegistrar,
     StatelessCoAPRegistrar,
 }
 
 pub struct Registrar {
-    pub rtype: RegistrarType,
+    pub rtype: [RegistrarType; (1+RegistrarType::StatelessCoAPRegistrar as usize)],
     pub addr: IpAddr,
     pub port: u16,
     pub last_announce: SystemTime,
@@ -143,15 +148,20 @@ impl AcpInterface {
         /* look into list of registrars */
         let mut found = self.registrars.iter_mut().find(|rm| { let r = &**rm;
                                                                r.addr == v6addr &&
-                                                               r.port == port_number  &&
-                                                               r.rtype == rtype});
+                                                               r.port == port_number});
         if let Some(ref mut r) = found {
             r.last_announce = SystemTime::now();
             r.ttl = ttl;
+            r.rtype[rtype as usize] = rtype;
         } else {
-            let newone = Registrar { addr: IpAddr::V6(v6addr), port: port_number,
-                                     rtype: rtype, last_announce: SystemTime::now(),
+            let mut newone = Registrar { addr: IpAddr::V6(v6addr), port: port_number,
+                                     last_announce: SystemTime::now(),
+                                     rtype: [RegistrarType::NoneRegistrar,
+                                             RegistrarType::NoneRegistrar,
+                                             RegistrarType::NoneRegistrar,
+                                             RegistrarType::NoneRegistrar],
                                      ttl: ttl };
+            newone.rtype[rtype as usize] = rtype;
             self.registrars.push(newone);
         };
     }
@@ -351,7 +361,7 @@ pub mod tests {
         Ok(())
     }
 
-    async fn async_process_mflood() -> Result<(), std::io::Error> {
+    async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= GraspMessage { mtype: GraspMessageType::M_FLOOD,
                                session_id: 1,
                                initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
@@ -376,8 +386,56 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_mflood() -> Result<(), std::io::Error> {
-        aw!(async_process_mflood()).unwrap();
+    fn test_process_mflood1() -> Result<(), std::io::Error> {
+        aw!(async_process_mflood1()).unwrap();
+        Ok(())
+    }
+
+    async fn async_process_mflood3() -> Result<(), std::io::Error> {
+        let m1= GraspMessage { mtype: GraspMessageType::M_FLOOD,
+                               session_id: 1,
+                               initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                               ttl: 180000,
+                               objectives: vec![
+                                   GraspObjective {
+                                       objective_name: "AN_join_registrar".to_string(),
+                                       objective_flags: 4, loop_count: 255,
+                                       objective_value: Some("".to_string()),
+                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                                           transport_proto: 6, port_number: 8993 }
+                                       )
+                                   },
+                                   GraspObjective {
+                                       objective_name: "AN_join_registrar".to_string(),
+                                       objective_flags: 4, loop_count: 255,
+                                       objective_value: Some(String::from(BRSKI_JPY_OBJECTIVE)),
+                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                                           transport_proto: 17, port_number: 2345 }
+                                       )
+                                   },
+                                   GraspObjective {
+                                       objective_name: "AN_join_registrar".to_string(),
+                                       objective_flags: 4, loop_count: 255,
+                                       objective_value: Some(String::from(BRSKI_COAP_OBJECTIVE)),
+                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                                           transport_proto: 17, port_number: 3456 }
+                                       )
+                                   }
+                               ]
+        };
+        let ifn = setup_ifn();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        aifn.registrar_announce(1, m1).await;
+        assert_eq!(aifn.registrars.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_mflood3() -> Result<(), std::io::Error> {
+        aw!(async_process_mflood3()).unwrap();
         Ok(())
     }
 
