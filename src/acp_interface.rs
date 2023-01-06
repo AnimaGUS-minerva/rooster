@@ -361,23 +361,65 @@ pub mod tests {
         Ok(())
     }
 
+    fn msg1() -> GraspMessage {
+        GraspMessage {
+            mtype: GraspMessageType::M_FLOOD,
+            session_id: 1,
+            initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+            ttl: 180000,
+            objectives: vec![
+                GraspObjective {
+                    objective_name: "AN_join_registrar".to_string(),
+                    objective_flags: 4, loop_count: 255,
+                    objective_value: Some("".to_string()),
+                    locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                        v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
+                        transport_proto: 6, port_number: 8993 }
+                    )
+                }
+            ]
+        }
+    }
+    fn msg3() -> GraspMessage {
+        GraspMessage {
+            mtype: GraspMessageType::M_FLOOD,
+            session_id: 3,
+            initiator: "fda3:79a6:f6ee:0:200:0:6400:2".parse::<Ipv6Addr>().unwrap(),
+            ttl: 180000,
+            objectives: vec![
+                GraspObjective {
+                    objective_name: "AN_join_registrar".to_string(),
+                    objective_flags: 4, loop_count: 255,
+                    objective_value: Some("".to_string()),
+                    locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                        v6addr: "fda3:79a6:f6ee:0:200:0:6400:2".parse::<Ipv6Addr>().unwrap(),
+                        transport_proto: 6, port_number: 8993 }
+                    )
+                },
+                GraspObjective {
+                    objective_name: "AN_join_registrar".to_string(),
+                    objective_flags: 4, loop_count: 255,
+                    objective_value: Some(String::from(BRSKI_JPY_OBJECTIVE)),
+                    locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                        v6addr: "fda3:79a6:f6ee:0:200:0:6400:2".parse::<Ipv6Addr>().unwrap(),
+                        transport_proto: 17, port_number: 2345 }
+                    )
+                },
+                GraspObjective {
+                    objective_name: "AN_join_registrar".to_string(),
+                    objective_flags: 4, loop_count: 255,
+                    objective_value: Some(String::from(BRSKI_COAP_OBJECTIVE)),
+                    locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                        v6addr: "fda3:79a6:f6ee:0:200:0:6400:2".parse::<Ipv6Addr>().unwrap(),
+                        transport_proto: 17, port_number: 3456 }
+                    )
+                }
+            ]
+        }
+    }
+
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
-        let m1= GraspMessage { mtype: GraspMessageType::M_FLOOD,
-                               session_id: 1,
-                               initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                               ttl: 180000,
-                               objectives: vec![
-                                   GraspObjective {
-                                       objective_name: "AN_join_registrar".to_string(),
-                                       objective_flags: 4, loop_count: 255,
-                                       objective_value: Some("".to_string()),
-                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
-                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                                           transport_proto: 6, port_number: 8993 }
-                                       )
-                                   }
-                               ]
-        };
+        let m1= msg1();
         let ifn = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
@@ -392,40 +434,7 @@ pub mod tests {
     }
 
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
-        let m1= GraspMessage { mtype: GraspMessageType::M_FLOOD,
-                               session_id: 1,
-                               initiator: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                               ttl: 180000,
-                               objectives: vec![
-                                   GraspObjective {
-                                       objective_name: "AN_join_registrar".to_string(),
-                                       objective_flags: 4, loop_count: 255,
-                                       objective_value: Some("".to_string()),
-                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
-                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                                           transport_proto: 6, port_number: 8993 }
-                                       )
-                                   },
-                                   GraspObjective {
-                                       objective_name: "AN_join_registrar".to_string(),
-                                       objective_flags: 4, loop_count: 255,
-                                       objective_value: Some(String::from(BRSKI_JPY_OBJECTIVE)),
-                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
-                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                                           transport_proto: 17, port_number: 2345 }
-                                       )
-                                   },
-                                   GraspObjective {
-                                       objective_name: "AN_join_registrar".to_string(),
-                                       objective_flags: 4, loop_count: 255,
-                                       objective_value: Some(String::from(BRSKI_COAP_OBJECTIVE)),
-                                       locator: Some(GraspLocator::O_IPv6_LOCATOR {
-                                           v6addr: "fda3:79a6:f6ee:0:200:0:6400:1".parse::<Ipv6Addr>().unwrap(),
-                                           transport_proto: 17, port_number: 3456 }
-                                       )
-                                   }
-                               ]
-        };
+        let m1= msg3();
         let ifn = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
