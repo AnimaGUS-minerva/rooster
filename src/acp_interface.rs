@@ -36,6 +36,7 @@ use std::net::{SocketAddrV6, IpAddr};
 //use std::net::{SocketAddr};
 use std::sync::Arc;
 use std::time::{SystemTime, Duration};
+use std::mem;
 
 use futures::lock::Mutex;
 use tokio::process::{Command};
@@ -59,16 +60,14 @@ pub const BRSKI_JPY_OBJECTIVE:  &str = "BRSKI_RJP";
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum RegistrarType {
-    NoneRegistrar,
-    HTTPRegistrar,
-    CoAPRegistrar,
-    StatelessCoAPRegistrar,
+    HTTPRegistrar{tcp_port: u16},
+    CoAPRegistrar{udp_port: u16},
+    StatelessCoAPRegistrar{udp_port: u16},
 }
 
 pub struct Registrar {
-    pub rtype: [RegistrarType; (1+RegistrarType::StatelessCoAPRegistrar as usize)],
+    pub rtypes: Vec<RegistrarType>,
     pub addr: IpAddr,
-    pub port: u16,
     pub last_announce: SystemTime,
     pub ttl:  Duration
 }
@@ -142,26 +141,34 @@ impl AcpInterface {
         }
     }
 
-    pub async fn add_registrar(self: &mut AcpInterface, _cnt: u32, rtype: RegistrarType,
+    pub async fn add_registrar(self: &mut AcpInterface, cnt: u32, rtype: RegistrarType,
                                v6addr: Ipv6Addr, port_number: u16, ttl: Duration) {
 
         /* look into list of registrars */
         let mut found = self.registrars.iter_mut().find(|rm| { let r = &**rm;
-                                                               r.addr == v6addr &&
-                                                               r.port == port_number});
+                                                               r.addr == v6addr});
         if let Some(ref mut r) = found {
+            self.debug.debug_verbose(format!("   {} old item for {}", cnt, port_number)).await;
             r.last_announce = SystemTime::now();
             r.ttl = ttl;
-            r.rtype[rtype as usize] = rtype;
+            let mut found = false;
+            for i in 0..(r.rtypes.len()) {
+                let rt = &r.rtypes[i];
+
+                if mem::discriminant(rt) == mem::discriminant(&rtype) {
+                    r.rtypes[i] = rtype;
+                    found = true;
+                }
+            }
+            if !found {
+                r.rtypes.push(rtype);
+            }
         } else {
-            let mut newone = Registrar { addr: IpAddr::V6(v6addr), port: port_number,
+            self.debug.debug_verbose(format!("   {} new item for {}", cnt, port_number)).await;
+            let newone = Registrar { addr: IpAddr::V6(v6addr),
                                      last_announce: SystemTime::now(),
-                                     rtype: [RegistrarType::NoneRegistrar,
-                                             RegistrarType::NoneRegistrar,
-                                             RegistrarType::NoneRegistrar,
-                                             RegistrarType::NoneRegistrar],
+                                     rtypes: vec![rtype],
                                      ttl: ttl };
-            newone.rtype[rtype as usize] = rtype;
             self.registrars.push(newone);
         };
     }
@@ -170,17 +177,21 @@ impl AcpInterface {
         let regcnt = 1;
         self.debug.debug_verbose("List of registrars:".to_string()).await;
         for registrar in &self.registrars {
-            if registrar.rtype[RegistrarType::HTTPRegistrar as usize] != RegistrarType::NoneRegistrar {
-                self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto HTTP",
-                                                 regcnt, registrar.addr, registrar.port)).await;
-            }
-            if registrar.rtype[RegistrarType::CoAPRegistrar as usize] != RegistrarType::NoneRegistrar {
-                self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto CoAP",
-                                                 regcnt, registrar.addr, registrar.port)).await;
-            }
-            if registrar.rtype[RegistrarType::StatelessCoAPRegistrar as usize] != RegistrarType::NoneRegistrar {
-                self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto StatelessCoAP",
-                                                 regcnt, registrar.addr, registrar.port)).await;
+            for rtype in &registrar.rtypes {
+                match rtype {
+                    RegistrarType::HTTPRegistrar{tcp_port} => {
+                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto HTTP",
+                                                         regcnt, registrar.addr, tcp_port)).await;
+                    },
+                    RegistrarType::CoAPRegistrar{udp_port} => {
+                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto CoAP",
+                                                         regcnt, registrar.addr, udp_port)).await;
+                    },
+                    RegistrarType::StatelessCoAPRegistrar{udp_port} => {
+                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto StatelessCoAP",
+                                                         regcnt, registrar.addr, udp_port)).await;
+                    }
+                }
             }
         }
     }
@@ -209,16 +220,19 @@ impl AcpInterface {
                                                          transport_proto, v6addr, port_number)).await;
                         match objective.objective_value {
                             Some(ref value) if value == "" || value == "BRSKI" => {
-                                self.add_registrar(cnt, RegistrarType::HTTPRegistrar, v6addr,
-                                                   port_number, ttl).await
+                                self.add_registrar(cnt, RegistrarType::HTTPRegistrar{tcp_port: port_number},
+                                                   v6addr, port_number,
+                                                   ttl).await
                             },
                             Some(ref value) if value == "BRSKI_JP" => {
-                                self.add_registrar(cnt, RegistrarType::CoAPRegistrar, v6addr,
-                                                   port_number, ttl).await
+                                self.add_registrar(cnt, RegistrarType::CoAPRegistrar{udp_port: port_number},
+                                                   v6addr, port_number,
+                                                   ttl).await
                             },
                             Some(ref value) if value == "BRSKI_RJP" => {
-                                self.add_registrar(cnt, RegistrarType::StatelessCoAPRegistrar,
-                                                   v6addr, port_number, ttl).await
+                                self.add_registrar(cnt, RegistrarType::StatelessCoAPRegistrar{udp_port: port_number},
+                                                   v6addr, port_number,
+                                                   ttl).await
                             },
                             _ => {
                                 self.debug.debug_verbose(format!("  {}.{} unknown objective value",
@@ -498,9 +512,10 @@ pub mod tests {
 
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,awriter) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
+        dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 1);
         Ok(())
     }
@@ -512,13 +527,14 @@ pub mod tests {
     }
 
     async fn async_process_mflood13() -> Result<(), std::io::Error> {
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,awriter) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
         let m3= msg3();
         aifn.registrar_announce(1, m3).await;
+        dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 2);
         Ok(())
     }
