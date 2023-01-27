@@ -228,8 +228,6 @@ impl AllInterfaces {
                                           handle:  &Handle,
                                           debug:   &DebugOptions) -> Result<(), Error> {
 
-        let mut list = handle.link().get().execute();
-
         debug.debug_info(format!("scanning existing interfaces")).await;
 
         let mut list = handle.link().get().execute();
@@ -271,8 +269,6 @@ impl AllInterfaces {
             // Said address is bound so new connections and
             // thus new message broadcasts can be received.
             connection.socket_mut().socket_mut().bind(&addr).expect("failed to bind");
-
-            AllInterfaces::initial_scan_interfaces(&handle, &myif, &myoptions, &mut debug).await;
 
             tokio::spawn(connection);
 
