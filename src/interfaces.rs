@@ -123,8 +123,8 @@ impl AllInterfaces {
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
                                      options: &RoosterOptions,
+                                     mydebug: Arc<DebugOptions>,
                                      lm: LinkMessage) {
-        let mydebug = self.debug.clone();
         let lh = lm.header;
         let ifindex = lh.index;
 
@@ -146,7 +146,11 @@ impl AllInterfaces {
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_detailed(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
+                        mydebug.debug_detailed(
+                            format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}",
+                                    addrset[0], addrset[1],
+                                    addrset[2], addrset[3],
+                                    addrset[4], addrset[5])).await;
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
@@ -217,28 +221,34 @@ impl AllInterfaces {
 
     pub async fn gather_link_info(lallif: &Arc<Mutex<AllInterfaces>>,
                                   options: &RoosterOptions,
+                                  debug:    Arc<DebugOptions>,
                                   lm: LinkMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
-        let _mydebug = allif.debug.clone();
 
-        allif.store_link_info(options,lm).await;
+        allif.store_link_info(options, debug, lm).await;
         Ok(())
     }
 
     pub async fn scan_existing_interfaces(lallif: &Arc<Mutex<AllInterfaces>>,
                                           options: &RoosterOptions,
                                           handle:  &Handle,
-                                          debug:   &DebugOptions) -> Result<(), Error> {
+                                          debug:   Arc<DebugOptions>) -> Result<(), Error> {
 
         debug.debug_info(format!("scanning existing interfaces")).await;
 
         let mut list = handle.link().get().execute();
         let mut cnt: u32 = 0;
+        let debugextra = Arc::new(DebugOptions {
+            debug_interfaces: debug.debug_interfaces,
+            verydebug_interfaces: true,
+            debug_output: debug.debug_output.clone()
+        });
 
         while let Some(link) = list.try_next().await.unwrap() {
             debug.debug_info(format!("scan message {}", cnt)).await;
             AllInterfaces::gather_link_info(&lallif,
                                             &options,
+                                            debugextra.clone(),
                                             link).await.unwrap();
             cnt += 1;
         }
@@ -275,7 +285,8 @@ impl AllInterfaces {
             tokio::spawn(connection);
 
             debug.debug_info("scanning existing interfaces".to_string()).await;
-            AllInterfaces::scan_existing_interfaces(&myif, &myoptions, &handle, &debug).await?;
+            AllInterfaces::scan_existing_interfaces(&myif, &myoptions,
+                                                    &handle, debug.clone()).await?;
 
             while let Some((message, _)) = messages.next().await {
                 let payload = message.payload;
@@ -295,6 +306,7 @@ impl AllInterfaces {
                     InnerMessage(NewLink(stuff)) => {
                         AllInterfaces::gather_link_info(&myif,
                                                         &myoptions,
+                                                        debug.clone(),
                                                         stuff).await.unwrap();
                     }
                     InnerMessage(NewAddress(stuff)) => {
@@ -425,11 +437,14 @@ pub mod tests {
 
     async fn async_locked_add_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
         let options = RoosterOptions::default();
-        {
+        let debug = {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 0);
-        }
-        AllInterfaces::gather_link_info(lallif, &options, setup_lm()).await.unwrap();
+            allif.debug.clone()
+        };
+        AllInterfaces::gather_link_info(lallif, &options,
+                                        debug.clone(),
+                                        setup_lm()).await.unwrap();
         {
             let allif      = lallif.lock().await;
             assert_eq!(allif.interfaces.len(), 1);
