@@ -1,5 +1,5 @@
 /*
- * Copyright [2022] <mcr@sandelman.ca>
+ * Copyright [2022,2023] <mcr@sandelman.ca>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -44,8 +44,8 @@ use crate::interface::Interface;
 use crate::interface::IfIndex;
 //use crate::grasp;
 //use crate::grasp::GraspMessage;
-use crate::interfaces::AllInterfaces;
-use crate::debugoptions::DebugOptions;
+//use crate::interfaces::AllInterfaces;
+//use crate::debugoptions::DebugOptions;
 
 pub struct JoinInterface {
     pub grasp_sock: UdpSocket,

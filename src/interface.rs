@@ -1,5 +1,5 @@
 /*
- * Copyright [2022] <mcr@sandelman.ca>
+ * Copyright [2022, 2023] <mcr@sandelman.ca>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ use futures::lock::Mutex;
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::acp_interface::AcpInterface;
-use crate::interfaces::AllInterfaces;
+//use crate::interfaces::AllInterfaces;
 
 pub type IfIndex = u32;
 
