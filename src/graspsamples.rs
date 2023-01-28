@@ -1,3 +1,6 @@
+/* Copyright [2022,2023] <mcr@sandelman.ca> */
+/* many of these test packets were captured and converted by various methods */
+
 /* confirmed working */
 pub static PACKET_000: [u8; 144] = [
     0x33, 0x33, 0x00, 0x00, 0x00, 0x13, 0x52, 0x54,
