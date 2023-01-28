@@ -46,6 +46,9 @@ async fn main() {
     if mainargs.debug_graspmessages {
         debug_options.debug_interfaces = true;
     }
+    if mainargs.debug_interfacedetail {
+        debug_options.verydebug_interfaces = true;
+    }
     println!("Debug Interfaces is {}", debug_options.debug_interfaces);
 
     let mut binterface = AllInterfaces::default();

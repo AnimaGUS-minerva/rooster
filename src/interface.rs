@@ -33,7 +33,6 @@ use futures::lock::Mutex;
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::acp_interface::AcpInterface;
-//use crate::interfaces::AllInterfaces;
 
 pub type IfIndex = u32;
 
@@ -94,6 +93,7 @@ impl Interface {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::interfaces::AllInterfaces;
     use super::*;
 
     #[allow(unused_macros)]
@@ -111,6 +111,7 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
+                                 verydebug_interfaces: false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);

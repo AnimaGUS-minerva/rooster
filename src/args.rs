@@ -24,6 +24,10 @@ pub struct RoosterOptions {
     #[structopt(long)]
     pub debug_graspmessages: bool,
 
+    /// turn on detailed debugging of interface management
+    #[structopt(long)]
+    pub debug_interfacedetail: bool,
+
     /// list of interfaces to ignore when auto-configuring
     #[structopt(long="--ignore-interface")]
     ignored_interfaces: Vec<String>,
@@ -41,6 +45,7 @@ impl RoosterOptions {
     pub fn default() -> Self {
         RoosterOptions {
             debug_graspmessages: true,
+            debug_interfacedetail: true,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
             joinlink_interfaces: vec![]
@@ -87,6 +92,20 @@ pub mod tests {
             RoosterOptions::from_iter_safe(&["rooster","--debug-graspmessages"]).unwrap(),
             RoosterOptions {
                 debug_graspmessages: true,
+                debug_interfacedetail: false,
+                ignored_interfaces: vec![], acp_interfaces: vec![],
+                joinlink_interfaces: vec![]
+            });
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_detailedinterface() -> Result<(), std::io::Error> {
+        assert_eq!(
+            RoosterOptions::from_iter_safe(&["rooster","--debug-interfacedetail"]).unwrap(),
+            RoosterOptions {
+                debug_graspmessages: false,
+                debug_interfacedetail: true,
                 ignored_interfaces: vec![], acp_interfaces: vec![],
                 joinlink_interfaces: vec![]
             });
@@ -99,6 +118,7 @@ pub mod tests {
             RoosterOptions::from_iter_safe(&["rooster","--acp-interface=eth0"]).unwrap(),
             RoosterOptions {
                 debug_graspmessages: false,
+                debug_interfacedetail: false,
                 ignored_interfaces: vec![],
                 acp_interfaces: vec!["eth0".to_string()],
                 joinlink_interfaces: vec![]
@@ -115,6 +135,7 @@ pub mod tests {
             ]).unwrap(),
             RoosterOptions {
                 debug_graspmessages: false,
+                debug_interfacedetail: false,
                 ignored_interfaces: vec![],
                 acp_interfaces: vec!["eth0".to_string(),"eth1".to_string()],
                 joinlink_interfaces: vec![]
@@ -133,6 +154,7 @@ pub mod tests {
     fn test_eth0_is_ignored() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
+            debug_interfacedetail: false,
             ignored_interfaces: vec!["eth0".to_string()],
             acp_interfaces: vec![],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -147,6 +169,7 @@ pub mod tests {
     fn test_eth0_is_joinlink() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
+            debug_interfacedetail: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec![],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -160,6 +183,7 @@ pub mod tests {
     fn test_eth0_is_acp() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
+            debug_interfacedetail: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec!["eth2".to_string()],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -173,6 +197,7 @@ pub mod tests {
     fn test_eth0_is_implicit_joinlink() -> Result<(), std::io::Error> {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
+            debug_interfacedetail: false,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
             joinlink_interfaces: vec![]

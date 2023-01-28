@@ -138,19 +138,19 @@ impl AllInterfaces {
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
-                        mydebug.debug_verbose(format!("ifname: {}", name)).await;
+                        mydebug.debug_detailed(format!("ifname: {}", name)).await;
                         ifn.ifname = name;
                     },
                     Nla::Mtu(bytes) => {
-                        mydebug.debug_verbose(format!("mtu: {}", bytes)).await;
+                        mydebug.debug_detailed(format!("mtu: {}", bytes)).await;
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_verbose(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
+                        mydebug.debug_detailed(format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}", addrset[0], addrset[1], addrset[2], addrset[3], addrset[4], addrset[5])).await;
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
-                            mydebug.debug_verbose(format!("device is up")).await;
+                            mydebug.debug_verbose(format!("device {} is up", ifn.ifname)).await;
                         }
                         ifn.oper_state = state;
                     },
@@ -175,10 +175,10 @@ impl AllInterfaces {
         };
 
         // now process result values from,
-        // looking for interfaces which are now up, and which
-        mydebug.debug_verbose(format!("ifn: {:?} old: {:?} new: {:?}",
-                                  &ifname, old_oper_state,
-                                  new_oper_state)).await;
+        // looking for interfaces which are now up, and which were not up before
+        mydebug.debug_detailed(format!("ifn: {:?} old: {:?} new: {:?}",
+                                     &ifname, old_oper_state,
+                                     new_oper_state)).await;
         if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let mut ifn  = ifna.lock().await;
@@ -188,11 +188,13 @@ impl AllInterfaces {
                 self.acp_interfaces.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
+                mydebug.debug_info(format!("device {} now up as ACP", ifn.ifname)).await;
                 ifn.start_acp(options, mydebug.clone()).await;
             } else if options.is_valid_joinlink_interface(&ifname) {
                 self.joinlink_interfaces.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
+                mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
                 ifn.start_joinlink(options, mydebug.clone()).await;
             } else {
                 mydebug.debug_info(format!("interface {} ignored", ifn.ifname)).await;
@@ -338,6 +340,7 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
+                                 verydebug_interfaces: false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
