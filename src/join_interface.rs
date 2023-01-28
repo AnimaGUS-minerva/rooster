@@ -44,7 +44,6 @@ use crate::interface::Interface;
 use crate::interface::IfIndex;
 //use crate::grasp;
 //use crate::grasp::GraspMessage;
-//use crate::interfaces::AllInterfaces;
 //use crate::debugoptions::DebugOptions;
 
 pub struct JoinInterface {
@@ -158,6 +157,8 @@ pub mod tests {
     use super::*;
     use netlink_packet_route::link::nlas::State;
     use crate::interface::InterfaceType;
+    use crate::interfaces::AllInterfaces;
+    use crate::debugoptions::DebugOptions;
 
     #[allow(unused_macros)]
     macro_rules! aw {
@@ -170,6 +171,7 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
+                                 verydebug_interfaces: false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);

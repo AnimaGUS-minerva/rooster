@@ -43,13 +43,11 @@ use tokio::process::{Command};
 
 use cbor::decoder::decode as cbor_decode;
 
-//use crate::debugoptions::DebugOptions;
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::grasp;
 use crate::grasp::GraspMessage;
-//use crate::interfaces::AllInterfaces;
 use crate::debugoptions::DebugOptions;
 use crate::grasp::GraspMessageType;
 use crate::grasp::GraspLocator;
@@ -335,6 +333,7 @@ impl AcpInterface {
 pub mod tests {
     use super::*;
     use netlink_packet_route::link::nlas::State;
+    use crate::interfaces::AllInterfaces;
     use crate::interface::InterfaceType;
     use crate::grasp::GraspObjective;
 
@@ -349,6 +348,7 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
+                                 verydebug_interfaces: false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
