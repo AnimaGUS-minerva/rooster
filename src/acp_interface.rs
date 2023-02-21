@@ -395,7 +395,7 @@ pub mod tests {
         Ok(())
     }
 
-    fn msg1() -> GraspMessage {
+    pub fn msg1() -> GraspMessage {
         GraspMessage {
             mtype: GraspMessageType::M_FLOOD,
             session_id: 1,
