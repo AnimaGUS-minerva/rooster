@@ -36,12 +36,6 @@ use crate::acp_interface::AcpInterface;
 
 pub type IfIndex = u32;
 
-pub enum InterfaceType {
-    Ignored,
-    AcpUpLink { acp_daemon: Arc<Mutex<AcpInterface>> },
-    JoinLink
-}
-
 pub struct Interface {
     pub debug:         Arc<DebugOptions>,
     pub ifindex:       IfIndex,
@@ -50,7 +44,7 @@ pub struct Interface {
     pub mtu:           u32,
     pub linklocal6:    Ipv6Addr,
     pub oper_state:    State,
-    pub daemon:        InterfaceType
+    pub acp_daemon:    Option<Arc<Mutex<AcpInterface>>>
 }
 
 impl Interface {
@@ -63,7 +57,7 @@ impl Interface {
             mtu:     0,
             linklocal6: Ipv6Addr::UNSPECIFIED,
             oper_state: State::Down,
-            daemon: InterfaceType::Ignored
+            acp_daemon: None,
         }
     }
     pub fn empty(ifi: IfIndex, debug: Arc<DebugOptions>) -> Interface {
@@ -75,18 +69,14 @@ impl Interface {
     pub async fn start_acp(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting Registrar listener on ACP interface {}", self.ifname)).await;
-        self.daemon = InterfaceType::AcpUpLink {
-            acp_daemon: AcpInterface::start_daemon(&self).await.unwrap()
-        };
+        self.acp_daemon = Some(AcpInterface::start_daemon(&self).await.unwrap());
     }
 
     pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
-        //self.daemon = InterfaceType::JoinLink {
-        //    join_daemon: JoinInterface::start_daemon(&self).await.unwrap()
-        //};
-
+        //self.join_daemon = Some(
+        //    Arc::new(Mutex::new(JoinInterface::start_daemon(&self).await.unwrap()))
     }
 }
 

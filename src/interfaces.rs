@@ -494,6 +494,37 @@ pub mod tests {
     }
 
 
+    async fn async_enable_join_downstream(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
+        allif.store_addr_info(&options, setup_am()).await;
+        assert_eq!(allif.interfaces.len(), 1);
+
+        // now simulate receiving a GRASP message on this new interface.
+        // first, go find interface
+        let li10 = allif.get_entry_by_ifindex(10).await;
+        // second, inject a message into that interface with announcement
+        let m1   = crate::acp_interface::tests::msg1();
+        {
+            let i10 = li10.lock().await;
+
+            /* i10 is now an *Interface*, look into it for a daemon */
+            if let Some(lacp_daemon) = &i10.acp_daemon {
+                let mut ad = lacp_daemon.lock().await;
+                ad.registrar_announce(/*cnt*/1, m1).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_enable_join_downstream() -> Result<(), std::io::Error> {
+        let (_awriter, mut all1) = setup_ai();
+        aw!(async_enable_join_downstream(&mut all1)).unwrap();
+        Ok(())
+    }
+
+
 
 }
 

@@ -334,7 +334,6 @@ pub mod tests {
     use super::*;
     use netlink_packet_route::link::nlas::State;
     use crate::interfaces::AllInterfaces;
-    use crate::interface::InterfaceType;
     use crate::grasp::GraspObjective;
 
     #[allow(unused_macros)]
@@ -364,7 +363,7 @@ pub mod tests {
         ifn.ignored= false;
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
-        ifn.daemon = InterfaceType::Ignored;
+        ifn.acp_daemon = None;
         (ifn,awriter)
     }
 
