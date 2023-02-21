@@ -186,6 +186,7 @@ impl AllInterfaces {
         if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let mut ifn  = ifna.lock().await;
+            let mut used = 0;
 
             // looks like a new device that is now up!
             if options.is_valid_acp_interface(&ifname) {
@@ -194,13 +195,19 @@ impl AllInterfaces {
                 });
                 mydebug.debug_info(format!("device {} now up as ACP", ifn.ifname)).await;
                 ifn.start_acp(options, mydebug.clone()).await;
-            } else if options.is_valid_joinlink_interface(&ifname) {
+                used = 1;
+            }
+
+            if options.is_valid_joinlink_interface(&ifname) {
                 self.joinlink_interfaces.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
                 ifn.start_joinlink(options, mydebug.clone()).await;
-            } else {
+                used = used + 1;
+            }
+
+            if used == 0 {
                 mydebug.debug_info(format!("interface {} ignored", ifn.ifname)).await;
             }
         }
