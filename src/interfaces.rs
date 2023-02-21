@@ -566,8 +566,9 @@ pub mod tests {
         // add interface two, set it as a join interface.
         let li12 = allif.get_entry_by_ifindex(12).await;
         {
-            let _i12 = li12.lock().await;
-            //i12.join_interface();
+            let i12 = li12.lock().await;
+            if let Some(_jdaemon) = &i12.join_daemon {
+            }
         }
 
         Ok(())
