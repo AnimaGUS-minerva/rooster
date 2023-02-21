@@ -33,6 +33,7 @@ use futures::lock::Mutex;
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::acp_interface::AcpInterface;
+use crate::join_interface::JoinInterface;
 
 pub type IfIndex = u32;
 
@@ -44,7 +45,8 @@ pub struct Interface {
     pub mtu:           u32,
     pub linklocal6:    Ipv6Addr,
     pub oper_state:    State,
-    pub acp_daemon:    Option<Arc<Mutex<AcpInterface>>>
+    pub acp_daemon:    Option<Arc<Mutex<AcpInterface>>>,
+    pub join_daemon:   Option<Arc<Mutex<JoinInterface>>>
 }
 
 impl Interface {
@@ -58,6 +60,7 @@ impl Interface {
             linklocal6: Ipv6Addr::UNSPECIFIED,
             oper_state: State::Down,
             acp_daemon: None,
+            join_daemon: None,
         }
     }
     pub fn empty(ifi: IfIndex, debug: Arc<DebugOptions>) -> Interface {
@@ -72,11 +75,11 @@ impl Interface {
         self.acp_daemon = Some(AcpInterface::start_daemon(&self).await.unwrap());
     }
 
-    pub async fn start_joinlink(self: &Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
+    pub async fn start_joinlink(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
-        //self.join_daemon = Some(
-        //    Arc::new(Mutex::new(JoinInterface::start_daemon(&self).await.unwrap()))
+        self.join_daemon = Some(
+            JoinInterface::start_daemon(&self).await.unwrap());
     }
 }
 

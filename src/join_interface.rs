@@ -26,6 +26,7 @@ extern crate moz_cbor as cbor;
 
 use std::net::Ipv6Addr;
 //use tokio::net::{UdpSocket, TcpSocket, TcpListener};
+use tokio::time::{sleep, Duration};
 use tokio::net::{UdpSocket, TcpListener};
 //use std::io::Error;
 use std::io::ErrorKind;
@@ -121,6 +122,10 @@ impl JoinInterface {
         })
     }
 
+    //pub async fn registrar_announce(self: &JoinInterface, ) -> Result<(), std::io::Error> {
+    //
+    //}
+
     pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
         let ai = JoinInterface::open_ports(ifn.ifindex).await.unwrap();
@@ -139,7 +144,8 @@ impl JoinInterface {
                 //if debug_graspdaemon {
                 //}
 
-                println!("{} loop: ", cnt);
+                println!("{} join loop: ", cnt);
+                sleep(Duration::from_millis(6000)).await;
 
                 cnt += 1;
             }
@@ -187,6 +193,7 @@ pub mod tests {
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
+        ifn.join_daemon = None;
         ifn
     }
 
