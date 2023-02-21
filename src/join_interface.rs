@@ -156,7 +156,6 @@ impl JoinInterface {
 pub mod tests {
     use super::*;
     use netlink_packet_route::link::nlas::State;
-    use crate::interface::InterfaceType;
     use crate::interfaces::AllInterfaces;
     use crate::debugoptions::DebugOptions;
 
@@ -187,7 +186,7 @@ pub mod tests {
         ifn.ignored= false;
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
-        ifn.daemon = InterfaceType::Ignored;
+        ifn.acp_daemon = None;
         ifn
     }
 
