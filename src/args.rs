@@ -69,6 +69,10 @@ impl RoosterOptions {
         return false;
     }
 
+    pub fn add_joinlink_interface(self: &mut Self, ifname: String) {
+        self.joinlink_interfaces.push(ifname);
+    }
+
     pub fn is_valid_joinlink_interface(self: &Self, ifname: &String) -> bool {
         if self.ignored_interfaces.contains(ifname) {
             return false;

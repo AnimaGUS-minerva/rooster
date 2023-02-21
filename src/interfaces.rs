@@ -378,6 +378,24 @@ pub mod tests {
         }
     }
 
+    /* define a second interface with ifindex and a Link-Local address, for Join */
+    fn setup_am_2() -> AddressMessage {
+        use netlink_packet_route::address::nlas::Nla;
+
+        AddressMessage {
+            header: AddressHeader { family: AF_INET6 as u8,
+                                    prefix_len: 64,
+                                    flags: 0,
+                                    scope: 0,
+                                    index: 12
+            },
+            nlas: vec![
+                Nla::Address(vec![0xfe, 0x80, 0,0, 0,0,0,0,
+                                  0x00, 0x00, 0,0, 0,0,0,2])
+            ],
+        }
+    }
+
 
     async fn async_add_interface(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         let options = RoosterOptions::default();
@@ -431,6 +449,25 @@ pub mod tests {
                 Nla::IfName("eth0".to_string()),
                 Nla::Mtu(1500),
                 Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0x9b, 0xba])
+            ],
+        }
+    }
+
+    /* define a new interface with ifindex and a Link-Local address */
+    fn setup_lm_2() -> LinkMessage {
+        use netlink_packet_route::link::nlas::Nla;
+
+        LinkMessage {
+            header: LinkHeader { interface_family: AF_INET6 as u8,
+                                 index: 12,
+                                 link_layer_type: ARPHRD_ETHER,
+                                 flags: IFF_UP|IFF_LOWER_UP,
+                                 change_mask: 0xffff_ffff
+            },
+            nlas: vec![
+                Nla::IfName("join0".to_string()),
+                Nla::Mtu(1500),
+                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0xa1, 0xab])
             ],
         }
     }
@@ -495,9 +532,14 @@ pub mod tests {
 
 
     async fn async_enable_join_downstream(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
-        let options = RoosterOptions::default();
+        let mut options = RoosterOptions::default();
+        options.add_joinlink_interface("join0".to_string());
+
+        allif.store_link_info(&options, allif.debug.clone(), setup_lm()).await;
         allif.store_addr_info(&options, setup_am()).await;
-        assert_eq!(allif.interfaces.len(), 1);
+        allif.store_link_info(&options, allif.debug.clone(), setup_lm_2()).await;
+        allif.store_addr_info(&options, setup_am_2()).await;
+        assert_eq!(allif.interfaces.len(), 2);
 
         // now simulate receiving a GRASP message on this new interface.
         // first, go find interface
@@ -512,6 +554,13 @@ pub mod tests {
                 let mut ad = lacp_daemon.lock().await;
                 ad.registrar_announce(/*cnt*/1, m1).await;
             }
+        }
+
+        // add interface two, set it as a join interface.
+        let li12 = allif.get_entry_by_ifindex(12).await;
+        {
+            let _i12 = li12.lock().await;
+            //i12.join_interface();
         }
 
         Ok(())
