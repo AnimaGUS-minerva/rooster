@@ -28,6 +28,10 @@ pub struct RoosterOptions {
     #[structopt(long)]
     pub debug_interfacedetail: bool,
 
+    /// turn on detailed debugging of announcements/connections on join networks
+    #[structopt(long)]
+    pub debug_joinnetworks: bool,
+
     /// list of interfaces to ignore when auto-configuring
     #[structopt(long="--ignore-interface")]
     ignored_interfaces: Vec<String>,
@@ -46,6 +50,7 @@ impl RoosterOptions {
         RoosterOptions {
             debug_graspmessages: true,
             debug_interfacedetail: true,
+            debug_joinnetworks: true,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
             joinlink_interfaces: vec![]
@@ -93,6 +98,7 @@ pub mod tests {
             RoosterOptions {
                 debug_graspmessages: true,
                 debug_interfacedetail: false,
+                debug_joinnetworks: false,
                 ignored_interfaces: vec![], acp_interfaces: vec![],
                 joinlink_interfaces: vec![]
             });
@@ -106,6 +112,21 @@ pub mod tests {
             RoosterOptions {
                 debug_graspmessages: false,
                 debug_interfacedetail: true,
+                debug_joinnetworks: false,
+                ignored_interfaces: vec![], acp_interfaces: vec![],
+                joinlink_interfaces: vec![]
+            });
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_joininterface() -> Result<(), std::io::Error> {
+        assert_eq!(
+            RoosterOptions::from_iter_safe(&["rooster","--debug-joinnetworks"]).unwrap(),
+            RoosterOptions {
+                debug_graspmessages: false,
+                debug_interfacedetail: false,
+                debug_joinnetworks: true,
                 ignored_interfaces: vec![], acp_interfaces: vec![],
                 joinlink_interfaces: vec![]
             });
@@ -119,6 +140,7 @@ pub mod tests {
             RoosterOptions {
                 debug_graspmessages: false,
                 debug_interfacedetail: false,
+                debug_joinnetworks: false,
                 ignored_interfaces: vec![],
                 acp_interfaces: vec!["eth0".to_string()],
                 joinlink_interfaces: vec![]
@@ -136,6 +158,7 @@ pub mod tests {
             RoosterOptions {
                 debug_graspmessages: false,
                 debug_interfacedetail: false,
+                debug_joinnetworks: false,
                 ignored_interfaces: vec![],
                 acp_interfaces: vec!["eth0".to_string(),"eth1".to_string()],
                 joinlink_interfaces: vec![]
@@ -155,6 +178,7 @@ pub mod tests {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             debug_interfacedetail: false,
+            debug_joinnetworks: false,
             ignored_interfaces: vec!["eth0".to_string()],
             acp_interfaces: vec![],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -170,6 +194,7 @@ pub mod tests {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             debug_interfacedetail: false,
+            debug_joinnetworks: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec![],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -184,6 +209,7 @@ pub mod tests {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             debug_interfacedetail: false,
+            debug_joinnetworks: false,
             ignored_interfaces: vec!["eth1".to_string()],
             acp_interfaces: vec!["eth2".to_string()],
             joinlink_interfaces: vec!["eth0".to_string()]
@@ -198,6 +224,7 @@ pub mod tests {
         let ro1 = RoosterOptions {
             debug_graspmessages: false,
             debug_interfacedetail: false,
+            debug_joinnetworks: false,
             ignored_interfaces: vec![],
             acp_interfaces: vec![],
             joinlink_interfaces: vec![]
