@@ -623,6 +623,6 @@ pub mod tests {
 /*
  * Local Variables:
  * mode: rust
- * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
+ * compile-command: "cd .. && cargo test"
  * End:
  */
