@@ -69,10 +69,13 @@ impl Interface {
         d
     }
 
-    pub async fn start_acp(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
+    pub async fn start_acp(self: &mut Self,
+                           _options: &RoosterOptions,
+                           mydebug: Arc<DebugOptions>,
+                           invalidate: Arc<Mutex<bool>>) {
 
         mydebug.debug_info(format!("starting Registrar listener on ACP interface {}", self.ifname)).await;
-        self.acp_daemon = Some(AcpInterface::start_daemon(&self).await.unwrap());
+        self.acp_daemon = Some(AcpInterface::start_daemon(&self, invalidate.clone()).await.unwrap());
     }
 
     pub async fn calculate_available_registrar(self: &Interface) -> (bool, bool, bool) {
@@ -85,11 +88,14 @@ impl Interface {
     }
 
 
-    pub async fn start_joinlink(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
+    pub async fn start_joinlink(self: &mut Self,
+                                _options: &RoosterOptions,
+                                mydebug: Arc<DebugOptions>,
+                                invalidate: Arc<Mutex<bool>>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
         self.join_daemon = Some(
-            JoinInterface::start_daemon(&self).await.unwrap());
+            JoinInterface::start_daemon(&self, invalidate.clone()).await.unwrap());
     }
 }
 
