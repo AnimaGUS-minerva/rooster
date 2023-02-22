@@ -127,7 +127,8 @@ impl JoinInterface {
         Ok(())
     }
 
-    pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
+    pub async fn start_daemon(ifn: &Interface,
+                              _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
         let ai = JoinInterface::open_ports(ifn.ifindex).await.unwrap();
 
@@ -198,9 +199,13 @@ pub mod tests {
         ifn
     }
 
+    fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
+        Arc::new(Mutex::new(false))
+    }
+
     async fn async_start_join() -> Result<(), std::io::Error> {
         let     ifn = setup_ifn();
-        JoinInterface::start_daemon(&ifn).await.unwrap();
+        JoinInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
 

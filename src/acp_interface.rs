@@ -278,7 +278,7 @@ impl AcpInterface {
         }
     }
 
-    pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
+    pub async fn start_daemon(ifn: &Interface, invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
         let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
@@ -325,11 +325,15 @@ impl AcpInterface {
                             }
                         };
 
-                         {
-                             let mut ai = ail.lock().await;
-                             ai.announce(cnt, graspmessage).await;
-                             ai.dump_registrar_list().await;
-                         }
+                        {
+                            let mut ai = ail.lock().await;
+                            ai.announce(cnt, graspmessage).await;
+                            ai.dump_registrar_list().await;
+                        }
+                        {
+                            let mut invalidated = invalidate.lock().await;
+                            *invalidated=true;
+                        }
                     }
                     Err(msg) => {
                         debug.debug_info(format!("{} grasp read got error: {:?}", cnt, msg)).await;
@@ -385,9 +389,13 @@ pub mod tests {
         (ifn,awriter)
     }
 
+    fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
+        Arc::new(Mutex::new(false))
+    }
+
     async fn async_start_acp() -> Result<(), std::io::Error> {
         let    (ifn,_awriter) = setup_ifn();
-        AcpInterface::start_daemon(&ifn).await.unwrap();
+        AcpInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
 

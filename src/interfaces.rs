@@ -59,6 +59,10 @@ use crate::interface::IfIndex;
 
 pub struct AllInterfaces {
     pub debug:           Arc<DebugOptions>,
+    pub invalidate_avail:Arc<Mutex<bool>>,
+    pub http_avail:      bool,
+    pub stateful_avail:  bool,  // CoAPS
+    pub stateless_avail: bool,  // CoAPS + JPY
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
@@ -68,6 +72,10 @@ impl AllInterfaces {
     pub fn default() -> AllInterfaces {
         return AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
+            invalidate_avail: Arc::new(Mutex::new(false)),
+            http_avail: false,
+            stateful_avail: false,
+            stateless_avail: false,
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
             joinlink_interfaces: HashMap::new()
@@ -195,7 +203,7 @@ impl AllInterfaces {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as ACP", ifn.ifname)).await;
-                ifn.start_acp(options, mydebug.clone()).await;
+                ifn.start_acp(options, mydebug.clone(), self.invalidate_avail.clone()).await;
                 used = 1;
             }
 
@@ -204,7 +212,7 @@ impl AllInterfaces {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
-                ifn.start_joinlink(options, mydebug.clone()).await;
+                ifn.start_joinlink(options, mydebug.clone(), self.invalidate_avail.clone()).await;
                 used = used + 1;
             }
 
@@ -351,6 +359,14 @@ impl AllInterfaces {
         }
         (http_avail, stateful_avail, stateless_avail)
     }
+
+    pub async fn update_available_registrars(self: &mut AllInterfaces) {
+        let (http_avail, stateful_avail, stateless_avail) = self.calculate_available_registrars().await;
+        self.http_avail=http_avail;
+        self.stateful_avail=stateful_avail;
+        self.stateless_avail=stateless_avail;
+    }
+
 
 }
 
