@@ -75,6 +75,16 @@ impl Interface {
         self.acp_daemon = Some(AcpInterface::start_daemon(&self).await.unwrap());
     }
 
+    pub async fn calculate_available_registrar(self: &Interface) -> (bool, bool, bool) {
+        if let Some(lacp) = &self.acp_daemon {
+            let acp = lacp.lock().await;
+            return acp.calculate_available_registrar().await;
+        } else {
+            return (false, false, false);
+        }
+    }
+
+
     pub async fn start_joinlink(self: &mut Self, _options: &RoosterOptions, mydebug: Arc<DebugOptions>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;

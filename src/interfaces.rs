@@ -56,6 +56,7 @@ use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 
+
 pub struct AllInterfaces {
     pub debug:           Arc<DebugOptions>,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
@@ -335,6 +336,22 @@ impl AllInterfaces {
         Ok(listenhandle)
     }
 
+    // goes through list of all registrars, and for each type of Registrar that we find
+    // note that such a protocol is available.
+    pub async fn calculate_available_registrars(self: &AllInterfaces) -> (bool, bool, bool) {
+        let mut stateless_avail = false;
+        let mut stateful_avail  = false;
+        let mut http_avail      = false;
+        for lai in self.acp_interfaces.values() {
+            let ai = lai.lock().await;
+            let (nhttp_avail, nstateful_avail, nstateless_avail) = ai.calculate_available_registrar().await;
+            http_avail     = http_avail | nhttp_avail;
+            stateful_avail = stateful_avail | nstateful_avail;
+            stateless_avail= stateless_avail | nstateless_avail;
+        }
+        (http_avail, stateful_avail, stateless_avail)
+    }
+
 }
 
 #[cfg(test)]
@@ -567,7 +584,9 @@ pub mod tests {
         let li12 = allif.get_entry_by_ifindex(12).await;
         {
             let i12 = li12.lock().await;
-            if let Some(_jdaemon) = &i12.join_daemon {
+            if let Some(jdaemon) = &i12.join_daemon {
+                let jd = jdaemon.lock().await;
+                jd.registrar_all_announce().await.unwrap();
             }
         }
 
