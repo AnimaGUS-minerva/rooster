@@ -236,21 +236,28 @@ impl AcpInterface {
                     GraspLocator::O_IPv6_LOCATOR{ v6addr, transport_proto, port_number } => {
                         self.debug.debug_verbose(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
                                                          transport_proto, v6addr, port_number)).await;
+
                         match objective.objective_value {
                             Some(ref value) if value == "" || value == "BRSKI" => {
                                 self.add_registrar(cnt, RegistrarType::HTTPRegistrar{tcp_port: port_number},
                                                    v6addr, port_number,
-                                                   ttl).await
+                                                   ttl).await;
+                                let mut invalidated = self.invalidate.lock().await;
+                                *invalidated=true;
                             },
                             Some(ref value) if value == "BRSKI_JP" => {
                                 self.add_registrar(cnt, RegistrarType::CoAPRegistrar{udp_port: port_number},
                                                    v6addr, port_number,
-                                                   ttl).await
+                                                   ttl).await;
+                                let mut invalidated = self.invalidate.lock().await;
+                                *invalidated=true;
                             },
                             Some(ref value) if value == "BRSKI_RJP" => {
                                 self.add_registrar(cnt, RegistrarType::StatelessCoAPRegistrar{udp_port: port_number},
                                                    v6addr, port_number,
-                                                   ttl).await
+                                                   ttl).await;
+                                let mut invalidated = self.invalidate.lock().await;
+                                *invalidated=true;
                             },
                             _ => {
                                 self.debug.debug_verbose(format!("  {}.{} unknown objective value",
@@ -331,9 +338,6 @@ impl AcpInterface {
                             let mut ai = ail.lock().await;
                             ai.announce(cnt, graspmessage).await;
                             ai.dump_registrar_list().await;
-
-                            let mut invalidated = ai.invalidate.lock().await;
-                            *invalidated=true;
                         }
                     }
                     Err(msg) => {
