@@ -122,9 +122,10 @@ impl JoinInterface {
         })
     }
 
-    //pub async fn registrar_announce(self: &JoinInterface, ) -> Result<(), std::io::Error> {
-    //
-    //}
+    // make an announcement of that kind of registrar.
+    pub async fn registrar_all_announce(self: &JoinInterface) -> Result<(), std::io::Error> {
+        Ok(())
+    }
 
     pub async fn start_daemon(ifn: &Interface) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 

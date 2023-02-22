@@ -91,6 +91,23 @@ impl AcpInterface {
         }
     }
 
+    pub async fn calculate_available_registrar(self: &AcpInterface) -> (bool, bool, bool) {
+        let mut stateless_avail = false;
+        let mut stateful_avail  = false;
+        let mut http_avail      = false;
+
+        for reg in &self.registrars {
+            for rtype in &reg.rtypes {
+                match rtype {
+                    RegistrarType::HTTPRegistrar{tcp_port: _} => { http_avail = true },
+                    RegistrarType::CoAPRegistrar{udp_port: _} => { stateful_avail = true },
+                    RegistrarType::StatelessCoAPRegistrar{udp_port: _} => { stateless_avail = true },
+                }
+            }
+        }
+        (http_avail, stateful_avail, stateless_avail)
+    }
+
     pub async fn open_grasp_port(ifn: &Interface,
                                  ifindex: IfIndex) -> Result<AcpInterface, std::io::Error> {
         use socket2::{Socket, Domain, Type};
