@@ -79,15 +79,16 @@ impl Registrar {
 pub struct AcpInterface {
     pub sock: UdpSocket,
     pub debug: Arc<DebugOptions>,
+    pub invalidate: Arc<Mutex<bool>>,
     pub registrars: Vec<Registrar>
 }
 
 impl AcpInterface {
-    pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>) -> AcpInterface {
+    pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>, invalidate:Arc<Mutex<bool>>) -> AcpInterface {
         AcpInterface {
             sock, debug,
+            invalidate,
             registrars: vec![]
-
         }
     }
 
@@ -110,7 +111,8 @@ impl AcpInterface {
     }
 
     pub async fn open_grasp_port(ifn: &Interface,
-                                 ifindex: IfIndex) -> Result<AcpInterface, std::io::Error> {
+                                 ifindex: IfIndex,
+                                 invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
         use socket2::{Socket, Domain, Type};
 
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
@@ -132,7 +134,7 @@ impl AcpInterface {
                 let grasp_mcast = "FF02:0:0:0:0:0:0:13".parse::<Ipv6Addr>().unwrap();
                 recv.join_multicast_v6(&grasp_mcast, ifindex).unwrap();
 
-                return Ok(AcpInterface::default(recv, ifn.debug.clone()));
+                return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
             },
             Err(err) => {
                 if err.kind() == ErrorKind::AddrInUse {
@@ -279,7 +281,7 @@ impl AcpInterface {
     }
 
     pub async fn start_daemon(ifn: &Interface, invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
-        let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex).await.unwrap();
+        let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
         let ai2 = ail.clone();
@@ -329,9 +331,8 @@ impl AcpInterface {
                             let mut ai = ail.lock().await;
                             ai.announce(cnt, graspmessage).await;
                             ai.dump_registrar_list().await;
-                        }
-                        {
-                            let mut invalidated = invalidate.lock().await;
+
+                            let mut invalidated = ai.invalidate.lock().await;
                             *invalidated=true;
                         }
                     }
@@ -409,7 +410,7 @@ pub mod tests {
     async fn async_open_socket() -> Result<(), std::io::Error> {
         let    (ifn,_awriter) = setup_ifn();
         // ifindex=1, is lo
-        let _aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let _aifn = AcpInterface::open_grasp_port(&ifn, 1, Arc::new(Mutex::new(true))).await.unwrap();
         Ok(())
     }
 
@@ -490,7 +491,7 @@ pub mod tests {
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= msg1();
         let    (ifn,_awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
 
@@ -518,7 +519,7 @@ pub mod tests {
     async fn async_process_mflood2() -> Result<(), std::io::Error> {
         let    (ifn,awriter) = setup_ifn();
 
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
@@ -545,7 +546,7 @@ pub mod tests {
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
         let    (ifn,awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 1);
@@ -564,7 +565,7 @@ pub mod tests {
 
     async fn async_process_mflood13() -> Result<(), std::io::Error> {
         let    (ifn,awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
+        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
