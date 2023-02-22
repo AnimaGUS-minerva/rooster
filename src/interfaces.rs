@@ -579,6 +579,10 @@ pub mod tests {
 
     async fn async_enable_join_downstream(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
         let mut options = RoosterOptions::default();
+        options.debug_graspmessages = true;
+        options.debug_interfacedetail = true;
+        options.debug_joinnetworks    = true;
+
         options.add_joinlink_interface("join0".to_string());
 
         allif.store_link_info(&options, allif.debug.clone(), setup_lm()).await;
@@ -586,6 +590,13 @@ pub mod tests {
         allif.store_link_info(&options, allif.debug.clone(), setup_lm_2()).await;
         allif.store_addr_info(&options, setup_am_2()).await;
         assert_eq!(allif.interfaces.len(), 2);
+
+        allif.update_available_registrars().await;
+        assert_eq!(allif.http_avail, false);
+        {
+            let invalidated = allif.invalidate_avail.lock().await;
+            assert_eq!(*invalidated, false);
+        }
 
         // now simulate receiving a GRASP message on this new interface.
         // first, go find interface
@@ -606,6 +617,9 @@ pub mod tests {
             let invalidated = allif.invalidate_avail.lock().await;
             assert_eq!(*invalidated, true);
         }
+
+        allif.update_available_registrars().await;
+        assert_eq!(allif.http_avail, true);
 
         // add interface two, set it as a join interface.
         let li12 = allif.get_entry_by_ifindex(12).await;
