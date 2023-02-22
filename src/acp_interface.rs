@@ -110,6 +110,14 @@ impl AcpInterface {
         (http_avail, stateful_avail, stateless_avail)
     }
 
+    #[cfg(test)]
+    pub async fn open_test_grasp_port(ifn: &Interface,
+                                      _ifindex: IfIndex,
+                                      invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
+        let recv = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
+    }
+
     pub async fn open_grasp_port(ifn: &Interface,
                                  ifindex: IfIndex,
                                  invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
@@ -288,6 +296,10 @@ impl AcpInterface {
     }
 
     pub async fn start_daemon(ifn: &Interface, invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
+        #[cfg(test)]
+        let ai = AcpInterface::open_test_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
+
+        #[cfg(not(test))]
         let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
