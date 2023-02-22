@@ -583,6 +583,7 @@ pub mod tests {
         options.debug_interfacedetail = true;
         options.debug_joinnetworks    = true;
 
+        options.add_acp_interface("eth0".to_string());
         options.add_joinlink_interface("join0".to_string());
 
         allif.store_link_info(&options, allif.debug.clone(), setup_lm()).await;
