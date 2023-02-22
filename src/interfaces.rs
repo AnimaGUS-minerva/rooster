@@ -72,7 +72,7 @@ impl AllInterfaces {
     pub fn default() -> AllInterfaces {
         return AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
-            invalidate_avail: Arc::new(Mutex::new(false)),
+            invalidate_avail: Arc::new(Mutex::new(true)),
             http_avail: false,
             stateful_avail: false,
             stateless_avail: false,
@@ -361,10 +361,16 @@ impl AllInterfaces {
     }
 
     pub async fn update_available_registrars(self: &mut AllInterfaces) {
-        let (http_avail, stateful_avail, stateless_avail) = self.calculate_available_registrars().await;
-        self.http_avail=http_avail;
-        self.stateful_avail=stateful_avail;
-        self.stateless_avail=stateless_avail;
+        {
+            let mut invalidated = self.invalidate_avail.lock().await;
+            if *invalidated {
+                let (http_avail, stateful_avail, stateless_avail) = self.calculate_available_registrars().await;
+                self.http_avail=http_avail;
+                self.stateful_avail=stateful_avail;
+                self.stateless_avail=stateless_avail;
+            }
+            *invalidated = false;
+        }
     }
 
 
@@ -594,6 +600,11 @@ pub mod tests {
                 let mut ad = lacp_daemon.lock().await;
                 ad.registrar_announce(/*cnt*/1, m1).await;
             }
+        }
+
+        {
+            let invalidated = allif.invalidate_avail.lock().await;
+            assert_eq!(*invalidated, true);
         }
 
         // add interface two, set it as a join interface.
