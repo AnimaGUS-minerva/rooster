@@ -91,6 +91,7 @@ impl AcpInterface {
         }
     }
 
+    // go through list of Registrar types, and report (http, coap, coap_jpy) availability
     pub async fn calculate_available_registrar(self: &AcpInterface) -> (bool, bool, bool) {
         let mut stateless_avail = false;
         let mut stateful_avail  = false;
@@ -484,6 +485,10 @@ pub mod tests {
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
+
+        // calculate what kind exists now.
+        assert_eq!(aifn.calculate_available_registrar().await, (true, false, false));
+
         Ok(())
     }
 
@@ -516,6 +521,9 @@ pub mod tests {
         assert_eq!(aifn.registrars.len(), 1);
         aifn.dump_registrar_list().await;
 
+        // calculate what kind exists now: should be only http
+        assert_eq!(aifn.calculate_available_registrar().await, (true, false, false));
+
         dump_debug(awriter).await;
         Ok(())
     }
@@ -533,6 +541,10 @@ pub mod tests {
         aifn.registrar_announce(1, m1).await;
         dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 1);
+
+        // calculate what kind exists now: should be http, coap and jpy
+        assert_eq!(aifn.calculate_available_registrar().await, (true, true, true));
+
         Ok(())
     }
 
@@ -552,6 +564,10 @@ pub mod tests {
         aifn.registrar_announce(1, m3).await;
         dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 2);
+
+        // calculate what kind exists now: should be http, coap and jpy
+        assert_eq!(aifn.calculate_available_registrar().await, (true, true, true));
+
         Ok(())
     }
 
