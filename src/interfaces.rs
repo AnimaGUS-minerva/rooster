@@ -577,7 +577,8 @@ pub mod tests {
     }
 
 
-    async fn async_enable_join_downstream(allif: &mut AllInterfaces) -> Result<(), std::io::Error> {
+    async fn async_enable_join_downstream(allif: &mut AllInterfaces,
+                                          awriter: Arc<Mutex<Vec<u8>>>) -> Result<(), std::io::Error> {
         let mut options = RoosterOptions::default();
         options.debug_graspmessages = true;
         options.debug_interfacedetail = true;
@@ -614,6 +615,10 @@ pub mod tests {
             }
         }
 
+        let output = awriter.lock().await;
+        let stuff = std::str::from_utf8(&output).unwrap();
+        println!("{}",stuff);
+
         {
             let invalidated = allif.invalidate_avail.lock().await;
             assert_eq!(*invalidated, true);
@@ -637,8 +642,8 @@ pub mod tests {
 
     #[test]
     fn test_enable_join_downstream() -> Result<(), std::io::Error> {
-        let (_awriter, mut all1) = setup_ai();
-        aw!(async_enable_join_downstream(&mut all1)).unwrap();
+        let (awriter, mut all1) = setup_ai();
+        aw!(async_enable_join_downstream(&mut all1, awriter)).unwrap();
         Ok(())
     }
 
