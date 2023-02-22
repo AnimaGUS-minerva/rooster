@@ -494,7 +494,8 @@ pub mod tests {
             nlas: vec![
                 Nla::IfName("eth0".to_string()),
                 Nla::Mtu(1500),
-                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0x9b, 0xba])
+                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0x9b, 0xba]),
+                Nla::OperState(State::Up)
             ],
         }
     }
@@ -513,7 +514,8 @@ pub mod tests {
             nlas: vec![
                 Nla::IfName("join0".to_string()),
                 Nla::Mtu(1500),
-                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0xa1, 0xab])
+                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0xa1, 0xab]),
+                Nla::OperState(State::Up)
             ],
         }
     }
