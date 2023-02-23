@@ -456,13 +456,13 @@ impl GraspMessage {
         }
     }
 
-    pub fn encode_dull_grasp_message(msg: GraspMessage) -> Result<CborType, ConnectError> {
-        let mtype = encode_grasp_mtype(&msg);
+    pub fn encode_dull_grasp_message(self: &GraspMessage) -> Result<CborType, ConnectError> {
+        let mtype = encode_grasp_mtype(self);
         let mut msgvec = vec![CborType::Integer(mtype),
-                          CborType::Integer(msg.session_id as u64),
-                          CborType::Bytes(msg.initiator.octets().to_vec()),
-                          CborType::Integer(msg.ttl as u64)];
-        for obj in msg.objectives {
+                          CborType::Integer(self.session_id as u64),
+                          CborType::Bytes(self.initiator.octets().to_vec()),
+                          CborType::Integer(self.ttl as u64)];
+        for obj in &self.objectives {
             msgvec.push(encode_grasp_objective(&obj));
         }
         let msg = CborType::Array(msgvec);
@@ -705,7 +705,7 @@ pub mod tests {
     fn test_create_mflood() -> Result<(), std::io::Error> {
 
         let msg   = create_mflood();
-        let cbor  = GraspMessage::encode_dull_grasp_message(msg).unwrap();
+        let cbor  = msg.encode_dull_grasp_message().unwrap();
         write_cbortype_to_file(&cbor, "samples/flood1.bin")?;
 
         let bytes = cbor.serialize();
