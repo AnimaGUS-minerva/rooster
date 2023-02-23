@@ -56,13 +56,28 @@ use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 
+#[derive(Clone, Debug)]
+pub struct ProxiesEnabled {
+    pub http_avail:      bool,
+    pub stateful_avail:  bool,  // CoAPS
+    pub stateless_avail: bool,  // CoAPS + JPY
+}
+
+impl ProxiesEnabled {
+    pub fn default() -> ProxiesEnabled {
+        return ProxiesEnabled {
+            http_avail: false,
+            stateful_avail: false,
+            stateless_avail: false
+        }
+    }
+}
+
 
 pub struct AllInterfaces {
     pub debug:           Arc<DebugOptions>,
     pub invalidate_avail:Arc<Mutex<bool>>,
-    pub http_avail:      bool,
-    pub stateful_avail:  bool,  // CoAPS
-    pub stateless_avail: bool,  // CoAPS + JPY
+    pub proxies:         ProxiesEnabled,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
@@ -73,9 +88,7 @@ impl AllInterfaces {
         return AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
             invalidate_avail: Arc::new(Mutex::new(true)),
-            http_avail: false,
-            stateful_avail: false,
-            stateless_avail: false,
+            proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
             joinlink_interfaces: HashMap::new()
@@ -365,9 +378,9 @@ impl AllInterfaces {
             let mut invalidated = self.invalidate_avail.lock().await;
             if *invalidated {
                 let (http_avail, stateful_avail, stateless_avail) = self.calculate_available_registrars().await;
-                self.http_avail=http_avail;
-                self.stateful_avail=stateful_avail;
-                self.stateless_avail=stateless_avail;
+                self.proxies.http_avail=http_avail;
+                self.proxies.stateful_avail=stateful_avail;
+                self.proxies.stateless_avail=stateless_avail;
             }
             *invalidated = false;
         }
@@ -596,7 +609,7 @@ pub mod tests {
         assert_eq!(allif.interfaces.len(), 2);
 
         allif.update_available_registrars().await;
-        assert_eq!(allif.http_avail, false);
+        assert_eq!(allif.proxies.http_avail, false);
         {
             let invalidated = allif.invalidate_avail.lock().await;
             assert_eq!(*invalidated, false);
@@ -617,17 +630,13 @@ pub mod tests {
             }
         }
 
-        let output = awriter.lock().await;
-        let stuff = std::str::from_utf8(&output).unwrap();
-        println!("{}",stuff);
-
         {
             let invalidated = allif.invalidate_avail.lock().await;
             assert_eq!(*invalidated, true);
         }
 
         allif.update_available_registrars().await;
-        assert_eq!(allif.http_avail, true);
+        assert_eq!(allif.proxies.http_avail, true);
 
         // add interface two, set it as a join interface.
         let li12 = allif.get_entry_by_ifindex(12).await;
@@ -635,9 +644,13 @@ pub mod tests {
             let i12 = li12.lock().await;
             if let Some(jdaemon) = &i12.join_daemon {
                 let jd = jdaemon.lock().await;
-                jd.registrar_all_announce().await.unwrap();
+                jd.registrar_all_announce(allif.proxies.clone()).await.unwrap();
             }
         }
+
+        let output = awriter.lock().await;
+        let stuff = std::str::from_utf8(&output).unwrap();
+        println!("{}",stuff);
 
         Ok(())
     }

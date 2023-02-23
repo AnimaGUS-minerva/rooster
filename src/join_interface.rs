@@ -43,7 +43,7 @@ use socket2::{Socket, Domain, Type};
 //use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
-//use crate::grasp;
+use crate::interfaces::ProxiesEnabled;
 //use crate::grasp::GraspMessage;
 //use crate::debugoptions::DebugOptions;
 
@@ -123,7 +123,8 @@ impl JoinInterface {
     }
 
     // make an announcement of that kind of registrar.
-    pub async fn registrar_all_announce(self: &JoinInterface) -> Result<(), std::io::Error> {
+    pub async fn registrar_all_announce(self: &JoinInterface,
+                                        _proxies: ProxiesEnabled) -> Result<(), std::io::Error> {
         Ok(())
     }
 
