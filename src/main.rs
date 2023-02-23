@@ -52,7 +52,8 @@ async fn main() {
     println!("Debug Interfaces is {}", debug_options.debug_interfaces);
 
     let mut binterface = AllInterfaces::default();
-    binterface.debug = Arc::new(debug_options);
+    let debug = Arc::new(debug_options);
+    binterface.debug = debug.clone();
     let interface = Arc::new(Mutex::new(binterface));
 
     let listeninterface = interface.clone();
@@ -60,9 +61,14 @@ async fn main() {
                                                       &mainargs);
     listenfuture.await.unwrap();
 
+    let mut main_loopcount = 0;
+
     let mut done = false;
     while !done {
         sleep(Duration::from_millis(10000)).await;
+
+        debug.debug_verbose(format!("{} main loop", main_loopcount));
+        main_loopcount += 1;
 
         done = {
             let mut doneinterface = interface.lock().await;

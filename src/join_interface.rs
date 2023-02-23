@@ -164,6 +164,7 @@ impl JoinInterface {
         // turn it into some bytes.
         let ct = gm.encode_dull_grasp_message().unwrap();
 
+        println!("sending GRASP DULL message");
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
                                                                  0,0,
