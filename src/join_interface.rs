@@ -20,18 +20,15 @@
 // 2. it listens on UDP and TCP socket, and then plugs the connection through.
 //
 
-//use std::net::Ipv6Addr;
-
 extern crate moz_cbor as cbor;
 
-use std::net::Ipv6Addr;
 //use tokio::net::{UdpSocket, TcpSocket, TcpListener};
 use tokio::time::{sleep, Duration};
 use tokio::net::{UdpSocket, TcpListener};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, IpAddr, Ipv6Addr};
 use std::sync::Arc;
 use futures::lock::Mutex;
 //use tokio::process::{Command};
@@ -164,7 +161,15 @@ impl JoinInterface {
             println!("stateless");
         }
 
-        let _ct = gm.encode_dull_grasp_message().unwrap();
+        // turn it into some bytes.
+        let ct = gm.encode_dull_grasp_message().unwrap();
+
+        // now write it to socket.
+        let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
+                                                                 0,0,
+                                                                 0,0,
+                                                                 0,0x13)), 7017);
+        self.grasp_sock.send_to(&ct.serialize(), graspdest).await.unwrap();
 
         Ok(())
     }
