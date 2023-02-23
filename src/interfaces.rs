@@ -653,7 +653,7 @@ pub mod tests {
             let i12 = li12.lock().await;
             if let Some(jdaemon) = &i12.join_daemon {
                 let jd = jdaemon.lock().await;
-                jd.registrar_all_announce(allif.proxies.clone()).await.unwrap();
+                jd.registrar_all_announce(allif.proxies.clone(), 1).await.unwrap();
             }
         }
 
