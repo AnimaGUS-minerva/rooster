@@ -55,6 +55,7 @@ use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
+use crate::grasp::SessionID;
 
 #[derive(Clone, Debug)]
 pub struct ProxiesEnabled {
@@ -78,6 +79,7 @@ pub struct AllInterfaces {
     pub debug:           Arc<DebugOptions>,
     pub invalidate_avail:Arc<Mutex<bool>>,
     pub proxies:         ProxiesEnabled,
+    pub next_session_id: SessionID,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
@@ -88,11 +90,18 @@ impl AllInterfaces {
         return AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
             invalidate_avail: Arc::new(Mutex::new(true)),
+            next_session_id: 1,
             proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
             joinlink_interfaces: HashMap::new()
         }
+    }
+
+    pub fn next_session_id(self: &mut AllInterfaces) -> SessionID {
+        let next_one = self.next_session_id;
+        self.next_session_id += 1;
+        return next_one;
     }
 
     pub async fn get_entry_by_ifindex<'a>(self: &'a mut AllInterfaces, ifindex: IfIndex) -> Arc<Mutex<Interface>> {

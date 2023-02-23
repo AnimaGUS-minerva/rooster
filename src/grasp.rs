@@ -24,7 +24,7 @@ use cbor::CborType;
 
 pub const GRASP_PORT: u32 = 7017;
 
-type SessionID  = u32;
+pub type SessionID  = u32;
 type Ttl        = u32;  /* miliseconds */
 
 #[allow(non_camel_case_types)]
