@@ -32,6 +32,8 @@ use futures::lock::Mutex;
 
 use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
+use crate::grasp::SessionID;
+use crate::interfaces::ProxiesEnabled;
 use crate::acp_interface::AcpInterface;
 use crate::join_interface::JoinInterface;
 
@@ -87,6 +89,16 @@ impl Interface {
         }
     }
 
+    // make an announcement of that kind of registrar.
+    pub async fn registrar_all_announce(self: &Interface,
+                                        proxies: ProxiesEnabled,
+                                        id: SessionID) -> Result<(), std::io::Error> {
+        if let Some(ljoinlink) = &self.join_daemon {
+            let joinlink = ljoinlink.lock().await;
+            joinlink.registrar_all_announce(proxies, id).await.unwrap();
+        }
+        Ok(())
+    }
 
     pub async fn start_joinlink(self: &mut Self,
                                 _options: &RoosterOptions,

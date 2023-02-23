@@ -59,7 +59,25 @@ async fn main() {
     let listenfuture  = AllInterfaces::listen_network(&listeninterface,
                                                       &mainargs);
     listenfuture.await.unwrap();
-    sleep(Duration::from_millis(1000000)).await;
+
+    let mut done = false;
+    while !done {
+        sleep(Duration::from_millis(10000)).await;
+
+        done = {
+            let mut doneinterface = interface.lock().await;
+
+            let sessionid = doneinterface.next_session_id();
+            doneinterface.update_available_registrars().await;
+            for ljl in doneinterface.joinlink_interfaces.values() {
+                let jl = ljl.lock().await;
+                jl.registrar_all_announce(doneinterface.proxies.clone(),
+                                          sessionid).await.unwrap();
+            }
+
+            doneinterface.exitnow
+        }
+    }
 }
 
 

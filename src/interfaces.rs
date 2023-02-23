@@ -77,6 +77,7 @@ impl ProxiesEnabled {
 
 pub struct AllInterfaces {
     pub debug:           Arc<DebugOptions>,
+    pub exitnow:         bool,
     pub invalidate_avail:Arc<Mutex<bool>>,
     pub proxies:         ProxiesEnabled,
     pub next_session_id: SessionID,
@@ -91,6 +92,7 @@ impl AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
             invalidate_avail: Arc::new(Mutex::new(true)),
             next_session_id: 1,
+            exitnow:    false,
             proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
