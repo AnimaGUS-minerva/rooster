@@ -31,11 +31,12 @@ use tokio::net::{UdpSocket, TcpListener};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
-//use std::net::{SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use futures::lock::Mutex;
 //use tokio::process::{Command};
 use socket2::{Socket, Domain, Type};
+use netlink_packet_sock_diag::constants::{IPPROTO_TCP, IPPROTO_UDP};
 
 //use cbor::decoder::decode as cbor_decode;
 
@@ -44,8 +45,8 @@ use socket2::{Socket, Domain, Type};
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::interfaces::ProxiesEnabled;
-//use crate::grasp::GraspMessage;
-//use crate::debugoptions::DebugOptions;
+use crate::grasp::{SessionID, GraspMessage, GraspObjective, GraspLocator, GraspMessageType};
+//use crate::grasp;
 
 pub struct JoinInterface {
     pub grasp_sock: UdpSocket,
@@ -124,7 +125,47 @@ impl JoinInterface {
 
     // make an announcement of that kind of registrar.
     pub async fn registrar_all_announce(self: &JoinInterface,
-                                        _proxies: ProxiesEnabled) -> Result<(), std::io::Error> {
+                                        proxies: ProxiesEnabled,
+                                        id: SessionID) -> Result<(), std::io::Error> {
+
+        let boundip = self.stateful_sock.local_addr();
+        let initiator = match boundip {
+            Ok(SocketAddr::V6(v6)) => { v6.ip().clone() }
+            _ => { return Ok(()) },
+        };
+
+        let mut gm = GraspMessage {
+            mtype: GraspMessageType::M_FLOOD,
+            session_id: id,
+            initiator: initiator,
+            ttl:       1,         // do not leave local network
+            objectives: vec![],
+        };
+
+        if proxies.http_avail {
+            let (v6addr,port) = match self.https_sock.local_addr() {
+                Ok(SocketAddr::V6(v6)) => { (v6.ip().clone(), v6.port()) }
+                _ => { return Ok(()) },
+            };
+            gm.objectives.push(GraspObjective { objective_name: "".to_string(),
+                                                objective_flags: 0,
+                                                loop_count: 1,
+                                                objective_value: None,
+                                                locator: Some(GraspLocator::O_IPv6_LOCATOR {
+                                                    v6addr: v6addr,
+                                                    transport_proto: IPPROTO_TCP,
+                                                    port_number: port
+                                                })});
+        }
+        if proxies.stateful_avail {
+            println!("hello");
+        }
+        if proxies.stateless_avail {
+            println!("stateless");
+        }
+
+        let _ct = gm.encode_dull_grasp_message().unwrap();
+
         Ok(())
     }
 
