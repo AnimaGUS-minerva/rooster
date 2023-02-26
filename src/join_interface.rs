@@ -43,9 +43,10 @@ use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::interfaces::ProxiesEnabled;
 use crate::grasp::{SessionID, GraspMessage, GraspObjective, GraspLocator, GraspMessageType};
-//use crate::grasp;
+use crate::debugoptions::DebugOptions;
 
 pub struct JoinInterface {
+    pub debug:      Arc<DebugOptions>,
     pub grasp_sock: UdpSocket,
     pub stateless_sock: UdpSocket,
     pub stateful_sock: UdpSocket,
@@ -106,7 +107,8 @@ impl JoinInterface {
         }
     }
 
-    pub async fn open_ports(ifindex: IfIndex) -> Result<JoinInterface, std::io::Error> {
+    pub async fn open_ports(debug: Arc<DebugOptions>,
+                            ifindex: IfIndex) -> Result<JoinInterface, std::io::Error> {
 
         let grasp_sock     = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
         let stateless_sock = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
@@ -116,19 +118,20 @@ impl JoinInterface {
         /* now open a UDP socket for plugging through to Registrar */
 
         return Ok(JoinInterface {
+            debug,
             grasp_sock,stateless_sock,stateful_sock,https_sock
         })
     }
 
     // make an announcement of that kind of registrar.
-    pub async fn registrar_all_announce(self: &JoinInterface,
-                                        proxies: ProxiesEnabled,
-                                        id: SessionID) -> Result<(), std::io::Error> {
+    pub async fn build_an_proxy(self: &JoinInterface,
+                                proxies: ProxiesEnabled,
+                                id: SessionID) -> Result<Vec<u8>, std::io::Error> {
 
         let boundip = self.stateful_sock.local_addr();
         let initiator = match boundip {
-            Ok(SocketAddr::V6(v6)) => { v6.ip().clone() }
-            _ => { return Ok(()) },
+            Ok(SocketAddr::V6(v6)) => { v6.ip().clone() },
+            _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) }
         };
 
         let mut gm = GraspMessage {
@@ -142,12 +145,13 @@ impl JoinInterface {
         if proxies.http_avail {
             let (v6addr,port) = match self.https_sock.local_addr() {
                 Ok(SocketAddr::V6(v6)) => { (v6.ip().clone(), v6.port()) }
-                _ => { return Ok(()) },
+                _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) },
             };
-            gm.objectives.push(GraspObjective { objective_name: "".to_string(),
+            self.debug.debug_verbose(format!("HTTP Registrar at {}", v6addr)).await;
+            gm.objectives.push(GraspObjective { objective_name: "AN_Proxy".to_string(),
                                                 objective_flags: 0,
                                                 loop_count: 1,
-                                                objective_value: None,
+                                                objective_value: Some("".to_string()),
                                                 locator: Some(GraspLocator::O_IPv6_LOCATOR {
                                                     v6addr: v6addr,
                                                     transport_proto: IPPROTO_TCP,
@@ -163,14 +167,33 @@ impl JoinInterface {
 
         // turn it into some bytes.
         let ct = gm.encode_dull_grasp_message().unwrap();
+        Ok(ct.serialize())
+    }
 
-        println!("sending GRASP DULL message");
+    // make an announcement of that kind of registrar.
+    pub async fn registrar_all_announce(self: &JoinInterface,
+                                        proxies: ProxiesEnabled,
+                                        id: SessionID) -> Result<(), std::io::Error> {
+
+        let mflood_err = self.build_an_proxy(proxies, id).await;
+        let mflood = match mflood_err {
+            Ok(x) => { x },
+            Err(err) => {
+                if err.kind() == ErrorKind::InvalidData {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+
+        self.debug.debug_verbose("sending GRASP DULL message".to_string()).await;
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
                                                                  0,0,
                                                                  0,0,
                                                                  0,0x13)), 7017);
-        self.grasp_sock.send_to(&ct.serialize(), graspdest).await.unwrap();
+        self.grasp_sock.send_to(&mflood, graspdest).await.unwrap();
 
         Ok(())
     }
@@ -178,7 +201,7 @@ impl JoinInterface {
     pub async fn start_daemon(ifn: &Interface,
                               _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
-        let ai = JoinInterface::open_ports(ifn.ifindex).await.unwrap();
+        let ai = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
         let ai2 = ail.clone();
@@ -265,9 +288,9 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        //let ifn = setup_ifn(None);
+        let ifn = setup_ifn();
         // ifindex=1, is lo
-        let _aifn = JoinInterface::open_ports(1).await.unwrap();
+        let _aifn = JoinInterface::open_ports(ifn.debug, 1).await.unwrap();
         Ok(())
     }
 
