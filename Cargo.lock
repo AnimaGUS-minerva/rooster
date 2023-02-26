@@ -236,6 +236,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-literal"
+version = "0.3.4"
+source = "git+https://github.com/AnimaGUS-minerva/utils.git?branch=allow-hash-comments-in-hex#a849b0040f462173f38e59cd2bba7b4a2a00c05c"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -527,6 +532,7 @@ dependencies = [
  "async-trait",
  "custom_error",
  "futures",
+ "hex-literal",
  "moz_cbor",
  "netlink-packet-route",
  "netlink-packet-sock-diag",

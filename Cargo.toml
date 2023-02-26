@@ -22,3 +22,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 [dev-dependencies]
 tokio-test    = "0.4.2"
 async-trait   = "0.1.57"
+hex-literal   = { version = "0.3.3" }
+
+[patch.crates-io]
+hex-literal   = { git = "https://github.com/AnimaGUS-minerva/utils.git", branch = "allow-hash-comments-in-hex" }

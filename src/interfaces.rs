@@ -407,6 +407,8 @@ pub mod tests {
         LinkHeader, AddressHeader,
         AF_INET6
     };
+    extern crate hex_literal;
+    use hex_literal::hex;
 
     #[allow(unused_macros)]
     macro_rules! aw {
@@ -648,13 +650,45 @@ pub mod tests {
 
         // add interface two, set it as a join interface.
         let li12 = allif.get_entry_by_ifindex(12).await;
-        {
+        let mflood = {
             let i12 = li12.lock().await;
             if let Some(jdaemon) = &i12.join_daemon {
                 let jd = jdaemon.lock().await;
-                jd.registrar_all_announce(allif.proxies.clone(), 1).await.unwrap();
+                jd.build_an_proxy(allif.proxies.clone(), 1).await.unwrap()
+            } else {
+                vec![1u8]
             }
-        }
+        };
+        println!("{:02x?}", mflood);
+
+        // /grasp-message/ [9, 1, /initiator/ h'00000000000000000000000000000000', 1,
+        //   [/objective/ [/objective-name/ "AN_Proxy", 0, 1, /objective-value/ ""],
+        //   [103, /ipv6-address/ h'00000000000000000000000000000000', 6, 38243]]]
+        assert_eq!(mflood, hex!("
+85                                      # array(5)
+   09                                   # unsigned(9)
+   01                                   # unsigned(1)
+   50                                   # bytes(16)
+      00000000000000000000000000000000
+   01                                   # unsigned(1)
+   82                                   # array(2)
+      84                                # array(4)
+         68                             # text(8)
+            414e5f50726f7879            # AN_Proxy
+         00                             # unsigned(0)
+         01                             # unsigned(1)
+         60                             # text(0)
+                                        #
+      84                                # array(4)
+         18 67                          # unsigned(103)
+         50                             # bytes(16)
+            00000000000000000000000000000000
+         06                             # unsigned(6)
+         19 9563                        # unsigned(38243)
+"));
+
+
+        assert_eq!(mflood.len(), 14);
 
         let output = awriter.lock().await;
         let stuff = std::str::from_utf8(&output).unwrap();
