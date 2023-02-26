@@ -50,7 +50,8 @@ pub struct JoinInterface {
     pub grasp_sock: UdpSocket,
     pub stateless_sock: UdpSocket,
     pub stateful_sock: UdpSocket,
-    pub https_sock: TcpListener,
+    pub https_sock: TcpListener,     pub https_v6addr: Ipv6Addr, pub https_port: u16
+
 }
 
 impl JoinInterface {
@@ -82,7 +83,7 @@ impl JoinInterface {
     }
 
     fn open_bound_tcpsocket(ifindex: IfIndex, socknum: u16) -> Result<tokio::net::TcpListener, std::io::Error> {
-        /* let kernel decide on port number */
+        /* bind this to the IPv6 Link Local address by IFINDEX */
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
                                       socknum, 0, ifindex);
 
@@ -116,24 +117,27 @@ impl JoinInterface {
         let https_sock     = JoinInterface::open_bound_tcpsocket(ifindex, 0)?;
 
         /* now open a UDP socket for plugging through to Registrar */
+        let (https_v6addr, https_port) = match https_sock.local_addr() {
+            Ok(SocketAddr::V6(v6)) => { (v6.ip().clone(), v6.port()) }
+            _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) },
+        };
 
         return Ok(JoinInterface {
             debug,
-            grasp_sock,stateless_sock,stateful_sock,https_sock
+            grasp_sock,stateless_sock,stateful_sock,
+            https_sock, https_v6addr, https_port
         })
     }
 
     // make an announcement of that kind of registrar.
     pub async fn build_an_proxy(self: &JoinInterface,
+                                ifn:  &Interface,
                                 proxies: ProxiesEnabled,
                                 id: SessionID) -> Result<Vec<u8>, std::io::Error> {
 
-        let boundip = self.stateful_sock.local_addr();
-        let initiator = match boundip {
-            Ok(SocketAddr::V6(v6)) => { v6.ip().clone() },
-            _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) }
-        };
-
+        // all of the sockets are bound to ::, with an ifindex, so to get the
+        // right address to announce, need to use the one in the ifn.
+        let initiator = ifn.linklocal6;
         let mut gm = GraspMessage {
             mtype: GraspMessageType::M_FLOOD,
             session_id: id,
@@ -143,19 +147,16 @@ impl JoinInterface {
         };
 
         if proxies.http_avail {
-            let (v6addr,port) = match self.https_sock.local_addr() {
-                Ok(SocketAddr::V6(v6)) => { (v6.ip().clone(), v6.port()) }
-                _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) },
-            };
-            self.debug.debug_verbose(format!("HTTP Registrar at {}", v6addr)).await;
+            self.debug.debug_verbose(format!("HTTP Registrar at {}:{}",
+                                             self.https_v6addr, self.https_port)).await;
             gm.objectives.push(GraspObjective { objective_name: "AN_Proxy".to_string(),
                                                 objective_flags: 0,
                                                 loop_count: 1,
                                                 objective_value: Some("".to_string()),
                                                 locator: Some(GraspLocator::O_IPv6_LOCATOR {
-                                                    v6addr: v6addr,
+                                                    v6addr: initiator,
                                                     transport_proto: IPPROTO_TCP,
-                                                    port_number: port
+                                                    port_number: self.https_port
                                                 })});
         }
         if proxies.stateful_avail {
@@ -172,10 +173,11 @@ impl JoinInterface {
 
     // make an announcement of that kind of registrar.
     pub async fn registrar_all_announce(self: &JoinInterface,
+                                        ifn:  &Interface,
                                         proxies: ProxiesEnabled,
                                         id: SessionID) -> Result<(), std::io::Error> {
 
-        let mflood_err = self.build_an_proxy(proxies, id).await;
+        let mflood_err = self.build_an_proxy(ifn, proxies, id).await;
         let mflood = match mflood_err {
             Ok(x) => { x },
             Err(err) => {

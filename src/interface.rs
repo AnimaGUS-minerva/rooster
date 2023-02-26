@@ -95,7 +95,7 @@ impl Interface {
                                         id: SessionID) -> Result<(), std::io::Error> {
         if let Some(ljoinlink) = &self.join_daemon {
             let joinlink = ljoinlink.lock().await;
-            joinlink.registrar_all_announce(proxies, id).await.unwrap();
+            joinlink.registrar_all_announce(self, proxies, id).await.unwrap();
         }
         Ok(())
     }

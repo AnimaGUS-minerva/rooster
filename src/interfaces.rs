@@ -653,8 +653,9 @@ pub mod tests {
         let mflood = {
             let i12 = li12.lock().await;
             if let Some(jdaemon) = &i12.join_daemon {
-                let jd = jdaemon.lock().await;
-                jd.build_an_proxy(allif.proxies.clone(), 1).await.unwrap()
+                let mut jd = jdaemon.lock().await;
+                jd.https_port = 1234;  // stuff the port number in unit test
+                jd.build_an_proxy(&i12, allif.proxies.clone(), 1).await.unwrap()
             } else {
                 vec![1u8]
             }
@@ -669,26 +670,23 @@ pub mod tests {
    09                                   # unsigned(9)
    01                                   # unsigned(1)
    50                                   # bytes(16)
-      00000000000000000000000000000000
+      fe800000000000000000000000000002
    01                                   # unsigned(1)
    82                                   # array(2)
       84                                # array(4)
          68                             # text(8)
-            414e5f50726f7879            # AN_Proxy
+            414e5f50726f7879
          00                             # unsigned(0)
          01                             # unsigned(1)
          60                             # text(0)
-                                        #
+
       84                                # array(4)
          18 67                          # unsigned(103)
          50                             # bytes(16)
-            00000000000000000000000000000000
+            fe800000000000000000000000000002
          06                             # unsigned(6)
-         19 9563                        # unsigned(38243)
+         19 04d2                        # unsigned(1234)
 "));
-
-
-        assert_eq!(mflood.len(), 14);
 
         let output = awriter.lock().await;
         let stuff = std::str::from_utf8(&output).unwrap();
