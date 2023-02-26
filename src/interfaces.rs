@@ -80,7 +80,7 @@ pub struct AllInterfaces {
     pub exitnow:         bool,
     pub invalidate_avail:Arc<Mutex<bool>>,
     pub proxies:         ProxiesEnabled,
-    pub next_session_id: SessionID,
+    pub next_session_id: Mutex<SessionID>,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
@@ -91,7 +91,7 @@ impl AllInterfaces {
         return AllInterfaces {
             debug:      Arc::new(DebugOptions::default()),
             invalidate_avail: Arc::new(Mutex::new(true)),
-            next_session_id: 1,
+            next_session_id: Mutex::new(1),
             exitnow:    false,
             proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
@@ -100,9 +100,10 @@ impl AllInterfaces {
         }
     }
 
-    pub fn next_session_id(self: &mut AllInterfaces) -> SessionID {
-        let next_one = self.next_session_id;
-        self.next_session_id += 1;
+    pub async fn next_session_id(self: &AllInterfaces) -> SessionID {
+        let mut usession_next = self.next_session_id.lock().await;
+        let next_one  = *usession_next;
+        *usession_next = next_one + 1;
         return next_one;
     }
 

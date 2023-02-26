@@ -67,16 +67,16 @@ async fn main() {
     while !done {
         sleep(Duration::from_millis(10000)).await;
 
-        debug.debug_verbose(format!("{} main loop", main_loopcount));
+        debug.debug_verbose(format!("{} main loop", main_loopcount)).await;
         main_loopcount += 1;
 
         done = {
             let mut doneinterface = interface.lock().await;
 
-            let sessionid = doneinterface.next_session_id();
             doneinterface.update_available_registrars().await;
             for ljl in doneinterface.joinlink_interfaces.values() {
                 let jl = ljl.lock().await;
+                let sessionid = doneinterface.next_session_id().await;
                 jl.registrar_all_announce(doneinterface.proxies.clone(),
                                           sessionid).await.unwrap();
             }
