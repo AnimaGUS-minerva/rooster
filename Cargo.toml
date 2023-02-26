@@ -17,6 +17,7 @@ netlink-proto = { version = "*", features = [ "tokio_socket" ] }
 netlink-packet-sock-diag = "*"
 netlink-packet-route = { version = "*" }
 custom_error  = "*"
+rand = { version = "0.8.5", features = ["small_rng"] }
 
 [dev-dependencies]
 tokio-test    = "0.4.2"
