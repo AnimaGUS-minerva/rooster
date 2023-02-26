@@ -57,6 +57,12 @@ impl DebugOptions {
         let mut output = self.debug_output.lock().await;
         writeln!(output, "I: {}", msg).unwrap();
     }
+
+    pub async fn debug_error(self: &Self,
+                             msg: String) {
+        let mut output = self.debug_output.lock().await;
+        writeln!(output, "E: {}", msg).unwrap();
+    }
 }
 
 #[cfg(test)]
