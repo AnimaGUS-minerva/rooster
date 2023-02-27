@@ -394,16 +394,16 @@ pub mod tests {
         (awriter, all1)
     }
 
-    fn setup_ifn() -> (Interface,Arc<Mutex<Vec<u8>>>) {
+    fn setup_ifn() -> (Interface,Arc<Mutex<Vec<u8>>>,AllInterfaces) {
         let (awriter, all1) = setup_ai();
-        let mut ifn = Interface::default(all1.debug);
+        let mut ifn = Interface::default(all1.debug.clone());
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
-        (ifn,awriter)
+        (ifn,awriter,all1)
     }
 
     fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
@@ -411,7 +411,7 @@ pub mod tests {
     }
 
     async fn async_start_acp() -> Result<(), std::io::Error> {
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,_awriter,_allif) = setup_ifn();
         AcpInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
@@ -424,7 +424,7 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,_awriter,_allif) = setup_ifn();
         // ifindex=1, is lo
         let _aifn = AcpInterface::open_grasp_port(&ifn, 1, Arc::new(Mutex::new(true))).await.unwrap();
         Ok(())
@@ -506,7 +506,7 @@ pub mod tests {
     // results a single registrar being processed
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= msg1();
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,_awriter,_allif) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
@@ -533,7 +533,7 @@ pub mod tests {
     // results a single registrar being processed, then feed the same announcement
     // (different session_id), and that it results in still a single entry.
     async fn async_process_mflood2() -> Result<(), std::io::Error> {
-        let    (ifn,awriter) = setup_ifn();
+        let    (ifn,awriter, _allif) = setup_ifn();
 
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
@@ -561,7 +561,7 @@ pub mod tests {
 
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
-        let    (ifn,awriter) = setup_ifn();
+        let    (ifn,awriter, _allif) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         dump_debug(awriter).await;
@@ -569,6 +569,8 @@ pub mod tests {
 
         // calculate what kind exists now: should be http, coap and jpy
         assert_eq!(aifn.calculate_available_registrar().await, (true, true, true));
+
+        // now see about looking for a registrar to use.
 
         Ok(())
     }
@@ -580,7 +582,7 @@ pub mod tests {
     }
 
     async fn async_process_mflood13() -> Result<(), std::io::Error> {
-        let    (ifn,awriter) = setup_ifn();
+        let    (ifn,awriter, _allif) = setup_ifn();
         let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
@@ -609,6 +611,6 @@ pub mod tests {
 /*
  * Local Variables:
  * mode: rust
- * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
+ * compile-command: "cd .. && cargo test"
  * End:
  */
