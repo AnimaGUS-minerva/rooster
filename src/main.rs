@@ -67,7 +67,7 @@ async fn main() {
     while !done {
         sleep(Duration::from_millis(5000)).await;
 
-        debug.debug_verbose(format!("{} main loop", main_loopcount)).await;
+        debug.debug_info(format!("{} main loop", main_loopcount)).await;
         main_loopcount += 1;
 
         done = {

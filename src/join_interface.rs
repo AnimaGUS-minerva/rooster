@@ -160,7 +160,7 @@ impl JoinInterface {
 
         if proxies.http_avail {
             self.debug.debug_verbose(format!("HTTP Registrar at {}:{}",
-                                             self.https_v6addr, self.https_port)).await;
+                                             initiator, self.https_port)).await;
             gm.objectives.push(GraspObjective { objective_name: "AN_Proxy".to_string(),
                                                 objective_flags: 0,
                                                 loop_count: 1,
@@ -201,7 +201,8 @@ impl JoinInterface {
             }
         };
 
-        self.debug.debug_verbose("sending GRASP DULL message".to_string()).await;
+        self.debug.debug_verbose(
+            format!("sending GRASP DULL message about port {]", self.https_port)).await;
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
                                                                  0,0,
@@ -220,6 +221,8 @@ impl JoinInterface {
             let ji = lji.lock().await;
             ji.debug.clone()
         };
+
+        debug.debug_info(format!("new pledge {} looking for Registrar", pledgeaddr)).await;
 
         // need to find a useful Registrar to connect to.
         if let Some(target_sockaddr) = AllInterfaces::locked_pick_available_https_registrar(lallif).await {
