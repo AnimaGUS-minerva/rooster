@@ -211,6 +211,7 @@ impl JoinInterface {
     }
 
     pub async fn proxy_https(lji: Arc<Mutex<JoinInterface>>,
+                             lallif: Arc<Mutex<AllInterfaces>>,
                              _socket: tokio::net::TcpStream,
                              pledgeaddr: std::net::SocketAddr) {
 
@@ -220,14 +221,14 @@ impl JoinInterface {
         };
 
         // need to find a useful Registrar to connect to.
-        {
-            debug.debug_info(format!("new pledge {:?}", pledgeaddr)).await;
+        if let Some(target_sockaddr) = AllInterfaces::locked_pick_available_https_registrar(lallif).await {
+            debug.debug_info(format!("new pledge {} connects to {}", pledgeaddr, target_sockaddr)).await;
             sleep(Duration::from_millis(6000)).await;
         }
     }
 
     pub async fn start_daemon(ifn: &Interface,
-                              _lallif: Arc<Mutex<AllInterfaces>>,
+                              lallif: Arc<Mutex<AllInterfaces>>,
                               _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
         let (ji,js) = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
@@ -253,9 +254,10 @@ impl JoinInterface {
                         debug.debug_verbose(format!("new pledge client from: {:?} on {:?}",
                                                     addr, socket)).await;
                         let ji3 = jil.clone();
-                        /* move ji3, socket and addr */
+                        let lallif3 = lallif.clone();
+                        /* move ji3, lallif3, socket and addr */
                         tokio::spawn(async move {
-                            JoinInterface::proxy_https(ji3, socket, addr).await;
+                            JoinInterface::proxy_https(ji3, lallif3, socket, addr).await;
                         });
                     },
                     Err(e) => debug.debug_error(format!("couldn't get client: {:?}", e)).await,
