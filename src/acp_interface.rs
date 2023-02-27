@@ -56,13 +56,14 @@ pub const BRSKI_HTTP_OBJECTIVE: &str = "BRSKI";
 pub const BRSKI_COAP_OBJECTIVE: &str = "BRSKI_JP";
 pub const BRSKI_JPY_OBJECTIVE:  &str = "BRSKI_RJP";
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug,Copy, Clone, PartialEq)]
 pub enum RegistrarType {
     HTTPRegistrar{tcp_port: u16},
     CoAPRegistrar{udp_port: u16},
     StatelessCoAPRegistrar{udp_port: u16},
 }
 
+#[derive(Debug)]
 pub struct Registrar {
     pub rtypes: Vec<RegistrarType>,
     pub addr: IpAddr,
@@ -76,6 +77,7 @@ impl Registrar {
     }
 }
 
+#[derive(Debug)]
 pub struct AcpInterface {
     pub sock: UdpSocket,
     pub debug: Arc<DebugOptions>,

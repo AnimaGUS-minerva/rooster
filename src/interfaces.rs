@@ -409,7 +409,9 @@ impl AllInterfaces {
             let ifn = lifn.lock().await;
             if let Some(lai) = &ifn.acp_daemon {
                 let ai = lai.lock().await;
+                //println!("searching {:?}", ai);
                 for reg in &ai.registrars {
+                    //println!("reg searching {:?}", reg);
                     for rtype in &reg.rtypes {
                         match rtype {
                             RegistrarType::HTTPRegistrar{tcp_port: port} => {
@@ -728,6 +730,12 @@ pub mod tests {
         let output = awriter.lock().await;
         let stuff = std::str::from_utf8(&output).unwrap();
         println!("{}",stuff);
+
+        // now pick a registrar from the available ones, returning the SocketAddr for it.
+        assert_eq!(allif.pick_available_https_registrar().await,
+                   Some(std::net::SocketAddr::new(
+                       "fda3:79a6:f6ee:0:200:0:6400:1".parse::<IpAddr>().unwrap(),
+                       8993)));
 
         Ok(())
     }
