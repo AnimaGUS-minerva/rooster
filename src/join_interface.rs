@@ -42,6 +42,7 @@ use netlink_packet_sock_diag::constants::{IPPROTO_TCP, IPPROTO_UDP};
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::interfaces::ProxiesEnabled;
+use crate::interfaces::AllInterfaces;
 use crate::grasp::{SessionID, GraspMessage, GraspObjective, GraspLocator, GraspMessageType};
 use crate::debugoptions::DebugOptions;
 
@@ -218,7 +219,7 @@ impl JoinInterface {
             ji.debug.clone()
         };
 
-        //loop
+        // need to find a useful Registrar to connect to.
         {
             debug.debug_info(format!("new pledge {:?}", pledgeaddr)).await;
             sleep(Duration::from_millis(6000)).await;
@@ -226,6 +227,7 @@ impl JoinInterface {
     }
 
     pub async fn start_daemon(ifn: &Interface,
+                              _lallif: Arc<Mutex<AllInterfaces>>,
                               _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
         let (ji,js) = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
@@ -295,9 +297,9 @@ pub mod tests {
         (awriter, all1)
     }
 
-    fn setup_ifn() -> Interface {
+    fn setup_ifn() -> (Interface,AllInterfaces) {
         let (_awriter, all1) = setup_ai();
-        let mut ifn = Interface::default(all1.debug);
+        let mut ifn = Interface::default(all1.debug.clone());
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
@@ -305,7 +307,7 @@ pub mod tests {
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
         ifn.join_daemon = None;
-        ifn
+        (ifn, all1)
     }
 
     fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
@@ -313,8 +315,9 @@ pub mod tests {
     }
 
     async fn async_start_join() -> Result<(), std::io::Error> {
-        let     ifn = setup_ifn();
-        JoinInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
+        let (ifn,all1) = setup_ifn();
+        let lall = Arc::new(Mutex::new(all1));
+        JoinInterface::start_daemon(&ifn, lall.clone(), setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
 
@@ -326,7 +329,7 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        let ifn = setup_ifn();
+        let (ifn,_all1) = setup_ifn();
         // ifindex=1, is lo
         let (_aifn,_js) = JoinInterface::open_ports(ifn.debug, 1).await.unwrap();
         Ok(())

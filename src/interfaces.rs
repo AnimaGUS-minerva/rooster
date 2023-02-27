@@ -152,6 +152,7 @@ impl AllInterfaces {
     }
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
+                                     allif: Arc<Mutex<AllInterfaces>>,
                                      options: &RoosterOptions,
                                      mydebug: Arc<DebugOptions>,
                                      lm: LinkMessage) {
@@ -233,7 +234,8 @@ impl AllInterfaces {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
-                ifn.start_joinlink(options, mydebug.clone(), self.invalidate_avail.clone()).await;
+                ifn.start_joinlink(allif.clone(), options,
+                                   mydebug.clone(), self.invalidate_avail.clone()).await;
                 used = used + 1;
             }
 
@@ -262,7 +264,7 @@ impl AllInterfaces {
                                   lm: LinkMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
 
-        allif.store_link_info(options, debug, lm).await;
+        allif.store_link_info(lallif.clone(), options, debug, lm).await;
         Ok(())
     }
 
@@ -602,9 +604,11 @@ pub mod tests {
     }
 
 
-    async fn async_enable_join_downstream(allif: &mut AllInterfaces,
+    async fn async_enable_join_downstream(lallif:  Arc<Mutex<AllInterfaces>>,
                                           awriter: Arc<Mutex<Vec<u8>>>) -> Result<(), std::io::Error> {
         let mut options = RoosterOptions::default();
+        let mut allif = lallif.lock().await;
+        let debug = { allif.debug.clone() };
         options.debug_graspmessages = true;
         options.debug_interfacedetail = true;
         options.debug_joinnetworks    = true;
@@ -612,9 +616,9 @@ pub mod tests {
         options.add_acp_interface("eth0".to_string());
         options.add_joinlink_interface("join0".to_string());
 
-        allif.store_link_info(&options, allif.debug.clone(), setup_lm()).await;
+        allif.store_link_info(lallif.clone(), &options, debug.clone(), setup_lm()).await;
         allif.store_addr_info(&options, setup_am()).await;
-        allif.store_link_info(&options, allif.debug.clone(), setup_lm_2()).await;
+        allif.store_link_info(lallif.clone(), &options, debug.clone(), setup_lm_2()).await;
         allif.store_addr_info(&options, setup_am_2()).await;
         assert_eq!(allif.interfaces.len(), 2);
 
@@ -697,8 +701,9 @@ pub mod tests {
 
     #[test]
     fn test_enable_join_downstream() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
-        aw!(async_enable_join_downstream(&mut all1, awriter)).unwrap();
+        let (awriter, all1) = setup_ai();
+        let lall = Arc::new(Mutex::new(all1));
+        aw!(async_enable_join_downstream(lall, awriter)).unwrap();
         Ok(())
     }
 

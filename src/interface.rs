@@ -34,6 +34,7 @@ use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::grasp::SessionID;
 use crate::interfaces::ProxiesEnabled;
+use crate::interfaces::AllInterfaces;
 use crate::acp_interface::AcpInterface;
 use crate::join_interface::JoinInterface;
 
@@ -101,13 +102,15 @@ impl Interface {
     }
 
     pub async fn start_joinlink(self: &mut Self,
+                                lallif:    Arc<Mutex<AllInterfaces>>,
                                 _options: &RoosterOptions,
                                 mydebug: Arc<DebugOptions>,
                                 invalidate: Arc<Mutex<bool>>) {
 
         mydebug.debug_info(format!("starting JoinProxy announcer on joinlink interface {}", self.ifname)).await;
         self.join_daemon = Some(
-            JoinInterface::start_daemon(&self, invalidate.clone()).await.unwrap());
+            JoinInterface::start_daemon(&self, lallif,
+                                        invalidate.clone()).await.unwrap());
     }
 }
 
