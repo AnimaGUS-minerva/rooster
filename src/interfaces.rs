@@ -24,7 +24,7 @@
 // list if the list is empty, otherwise, they are ignored
 //
 
-use std::net::Ipv6Addr;
+use std::net::{Ipv6Addr, IpAddr, SocketAddr};
 use std::collections::HashMap;
 use std::sync::Arc;
 use futures::lock::Mutex;
@@ -36,7 +36,7 @@ use rtnetlink::{
     Handle,
     Error,
     new_connection,
-    sys::{AsyncSocket, SocketAddr},
+    sys::{AsyncSocket}
 };
 use netlink_packet_route::{
     NetlinkPayload::InnerMessage,
@@ -55,6 +55,7 @@ use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
+use crate::acp_interface::{RegistrarType};
 use crate::grasp::SessionID;
 
 #[derive(Clone, Debug)]
@@ -83,6 +84,13 @@ pub struct AllInterfaces {
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
+}
+
+fn sockaddr_from_addr(n1: IpAddr, port: u16) -> SocketAddr {
+    match n1 {
+        IpAddr::V4(v4addr) => { SocketAddr::new(IpAddr::V4(v4addr), port) },
+        IpAddr::V6(v6addr) => { SocketAddr::new(IpAddr::V6(v6addr), port) },
+    }
 }
 
 impl AllInterfaces {
@@ -315,7 +323,7 @@ impl AllInterfaces {
             let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
 
             // A netlink socket address is created with said flags.
-            let addr = SocketAddr::new(0, mgroup_flags);
+            let addr = rtnetlink::sys::SocketAddr::new(0, mgroup_flags);
 
             // Said address is bound so new connections and
             // thus new message broadcasts can be received.
@@ -394,6 +402,31 @@ impl AllInterfaces {
             }
             *invalidated = false;
         }
+    }
+
+    pub async fn pick_available_https_registrar(self: &AllInterfaces) -> Option<SocketAddr> {
+        for lifn in self.acp_interfaces.values() {
+            let ifn = lifn.lock().await;
+            if let Some(lai) = &ifn.acp_daemon {
+                let ai = lai.lock().await;
+                for reg in &ai.registrars {
+                    for rtype in &reg.rtypes {
+                        match rtype {
+                            RegistrarType::HTTPRegistrar{tcp_port: port} => {
+                                return Some(sockaddr_from_addr(reg.addr, *port))
+                            },
+                            _ => { },
+                        }
+                    }
+                }
+            }
+        }
+        return None;
+    }
+
+    pub async fn locked_pick_available_https_registrar(lallif: Arc<Mutex<AllInterfaces>>) -> Option<SocketAddr> {
+        let allif = lallif.lock().await;
+        return allif.pick_available_https_registrar().await;
     }
 
 

@@ -571,7 +571,7 @@ pub mod tests {
         assert_eq!(aifn.calculate_available_registrar().await, (true, true, true));
 
         // now see about looking for a registrar to use.
-
+        //let target_acp = allif.;
         Ok(())
     }
 
