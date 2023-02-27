@@ -100,8 +100,10 @@ impl JoinInterface {
         rawfd.set_reuse_port(true).unwrap();
         rawfd.set_reuse_address(true).unwrap();
         rawfd.set_nonblocking(true).unwrap();
+        println!("tcp socket: index: {} {:?}, {:?}", ifindex, rawfd, rsin6);
         match rawfd.bind(&socket2::SockAddr::from(rsin6)) {
             Ok(()) => {
+                rawfd.listen(128)?;
                 let listener = TcpListener::from_std(rawfd.into())?;
                 Ok(listener)
             },
@@ -247,7 +249,7 @@ impl JoinInterface {
             let mut cnt: u32 = 0;
 
             loop {
-                debug.debug_verbose(format!("{} join loop: ", cnt)).await;
+                debug.debug_verbose(format!("{} join loop: {:?}", cnt, https_listen_sock)).await;
 
                 match https_listen_sock.accept().await {
                     Ok((socket, addr)) => {
@@ -260,7 +262,10 @@ impl JoinInterface {
                             JoinInterface::proxy_https(ji3, lallif3, socket, addr).await;
                         });
                     },
-                    Err(e) => debug.debug_error(format!("couldn't get client: {:?}", e)).await,
+                    Err(e) => {
+                        debug.debug_error(format!("couldn't get client: {:?}", e)).await;
+                        sleep(Duration::from_millis(5000)).await;
+                    },
                 }
                 cnt += 1;
             }
