@@ -22,9 +22,8 @@
 
 extern crate moz_cbor as cbor;
 
-//use tokio::net::{UdpSocket, TcpSocket, TcpListener};
 use tokio::time::{sleep, Duration};
-use tokio::net::{UdpSocket, TcpListener};
+use tokio::net::{UdpSocket, TcpListener, TcpStream};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
@@ -88,10 +87,10 @@ impl JoinInterface {
         }
     }
 
-    fn open_bound_tcpsocket(ifindex: IfIndex, socknum: u16) -> Result<tokio::net::TcpListener, std::io::Error> {
+    fn open_bound_tcpsocket(ifindex: IfIndex, portnum: u16) -> Result<tokio::net::TcpListener, std::io::Error> {
         /* bind this to the IPv6 Link Local address by IFINDEX */
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
-                                      socknum, 0, ifindex);
+                                      portnum, 0, ifindex);
 
         // create a TCP socket
         let rawfd = Socket::new(Domain::ipv6(), Type::stream(), None).unwrap();
@@ -100,8 +99,9 @@ impl JoinInterface {
         rawfd.set_reuse_port(true).unwrap();
         rawfd.set_reuse_address(true).unwrap();
         rawfd.set_nonblocking(true).unwrap();
-        println!("tcp socket: index: {} {:?}, {:?}", ifindex, rawfd, rsin6);
-        match rawfd.bind(&socket2::SockAddr::from(rsin6)) {
+        let sock6 = &socket2::SockAddr::from(rsin6);
+        //println!("tcp socket: index: {} {:?}, {:?}", ifindex, rawfd, sock6);
+        match rawfd.bind(sock6) {
             Ok(()) => {
                 rawfd.listen(128)?;
                 let listener = TcpListener::from_std(rawfd.into())?;
@@ -214,9 +214,8 @@ impl JoinInterface {
 
     pub async fn proxy_https(lji: Arc<Mutex<JoinInterface>>,
                              lallif: Arc<Mutex<AllInterfaces>>,
-                             _socket: tokio::net::TcpStream,
-                             pledgeaddr: std::net::SocketAddr) {
-
+                             mut socket: tokio::net::TcpStream,
+                             pledgeaddr: std::net::SocketAddr) -> Result<(), std::io::Error> {
         let debug = {
             let ji = lji.lock().await;
             ji.debug.clone()
@@ -225,7 +224,22 @@ impl JoinInterface {
         // need to find a useful Registrar to connect to.
         if let Some(target_sockaddr) = AllInterfaces::locked_pick_available_https_registrar(lallif).await {
             debug.debug_info(format!("new pledge {} connects to {}", pledgeaddr, target_sockaddr)).await;
-            sleep(Duration::from_millis(6000)).await;
+            match TcpStream::connect(target_sockaddr).await {
+                Ok(mut conn) => {
+                    // Bidirectional copy
+                    let (n1, n2) = tokio::io::copy_bidirectional(&mut socket, &mut conn).await?;
+                    debug.debug_info(format!("copied {} / {} bytes between streams", n1,n2)).await;
+                    return Ok(())
+                },
+                Err(e)   => {
+                    debug.debug_error(
+                        format!("did not connect to Registrar: {}",e)).await;
+                    return Err(e);
+                }
+            }
+        } else {
+            debug.debug_info(format!("no available ACP Registrar for new pledge {}", pledgeaddr)).await;
+            return Ok(());
         }
     }
 
@@ -259,7 +273,7 @@ impl JoinInterface {
                         let lallif3 = lallif.clone();
                         /* move ji3, lallif3, socket and addr */
                         tokio::spawn(async move {
-                            JoinInterface::proxy_https(ji3, lallif3, socket, addr).await;
+                            JoinInterface::proxy_https(ji3, lallif3, socket, addr).await.expect("connection failure");
                         });
                     },
                     Err(e) => {
