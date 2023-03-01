@@ -34,7 +34,7 @@ pub mod error;
 use crate::args::RoosterOptions;
 use crate::interfaces::AllInterfaces;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
 
     // process the arguments to find out which interface is the uplink
@@ -67,8 +67,8 @@ async fn main() {
     while !done {
         sleep(Duration::from_millis(5000)).await;
 
-        debug.debug_info(format!("{} main loop", main_loopcount)).await;
         main_loopcount += 1;
+        debug.debug_info(format!("{} main loop", main_loopcount)).await;
 
         done = {
             let mut doneinterface = interface.lock().await;
@@ -82,7 +82,8 @@ async fn main() {
             }
 
             doneinterface.exitnow
-        }
+        };
+        debug.debug_info(format!("{} end main loop", main_loopcount)).await;
     }
 }
 

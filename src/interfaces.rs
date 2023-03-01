@@ -427,7 +427,9 @@ impl AllInterfaces {
     }
 
     pub async fn locked_pick_available_https_registrar(lallif: Arc<Mutex<AllInterfaces>>) -> Option<SocketAddr> {
+        println!("locked getting lock");
         let allif = lallif.lock().await;
+        println!("locked got lock");
         return allif.pick_available_https_registrar().await;
     }
 
