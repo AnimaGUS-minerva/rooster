@@ -37,6 +37,11 @@ use crate::interfaces::AllInterfaces;
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
 
+    // construct a subscriber that prints formatted traces to stdout
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    // use that subscriber to process traces emitted after this point
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+
     // process the arguments to find out which interface is the uplink
     // interface.
     let mainargs = RoosterOptions::from_args();
