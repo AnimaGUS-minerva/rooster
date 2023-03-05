@@ -76,17 +76,24 @@ async fn main() {
         debug.debug_info(format!("{} main loop", main_loopcount)).await;
 
         done = {
-            let mut doneinterface = interface.lock().await;
 
-            doneinterface.update_available_registrars().await;
-            for ljl in doneinterface.joinlink_interfaces.values() {
+            let (lji_hash, proxies, isitdone) = {
+                let mut doneinterface = interface.lock().await;
+
+                doneinterface.update_available_registrars().await;
+                (doneinterface.joinlink_interfaces.clone(), doneinterface.proxies.clone(), doneinterface.exitnow)
+            };
+            // doneinterface lock is released here.
+            let ji_hash = lji_hash.lock().await;
+
+            for ljl in ji_hash.values() {
                 let jl = ljl.lock().await;
-                let sessionid = doneinterface.next_session_id().await;
-                jl.registrar_all_announce(doneinterface.proxies.clone(),
-                                          sessionid).await.unwrap();
+                let session_id = rand::random::<u32>();
+                jl.registrar_all_announce(proxies.clone(),
+                                          session_id).await.unwrap();
             }
 
-            doneinterface.exitnow
+            isitdone
         };
         debug.debug_info(format!("{} end main loop", main_loopcount)).await;
     }

@@ -58,7 +58,7 @@ use crate::interface::IfIndex;
 use crate::acp_interface::{RegistrarType};
 use crate::grasp::SessionID;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProxiesEnabled {
     pub http_avail:      bool,
     pub stateful_avail:  bool,  // CoAPS
@@ -83,7 +83,9 @@ pub struct AllInterfaces {
     pub proxies:         ProxiesEnabled,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
-    pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
+    // this needs a mutex on it so that the announce iteration loop
+    // can run without taking a lock on AllInterfaces.
+    pub joinlink_interfaces:  Arc<Mutex<HashMap<IfIndex, Arc<Mutex<Interface>>>>>
 }
 
 fn sockaddr_from_addr(n1: IpAddr, port: u16) -> SocketAddr {
@@ -102,13 +104,8 @@ impl AllInterfaces {
             proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
-            joinlink_interfaces: HashMap::new()
+            joinlink_interfaces: Arc::new(Mutex::new(HashMap::new()))
         }
-    }
-
-    pub async fn next_session_id(self: &AllInterfaces) -> SessionID {
-        let next_one = rand::random::<u32>();
-        return next_one;
     }
 
     pub async fn get_entry_by_ifindex<'a>(self: &'a mut AllInterfaces, ifindex: IfIndex) -> Arc<Mutex<Interface>> {
@@ -238,7 +235,8 @@ impl AllInterfaces {
             }
 
             if options.is_valid_joinlink_interface(&ifname) {
-                self.joinlink_interfaces.entry(ifindex).or_insert_with(|| {
+                let mut ji_hash = self.joinlink_interfaces.lock().await;
+                ji_hash.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
