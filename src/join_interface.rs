@@ -32,7 +32,7 @@ use std::sync::Arc;
 use futures::lock::Mutex;
 //use tokio::process::{Command};
 use socket2::{Socket, Domain, Type};
-use netlink_packet_sock_diag::constants::{IPPROTO_TCP, IPPROTO_UDP};
+use netlink_packet_sock_diag::constants::{IPPROTO_TCP};
 
 //use cbor::decoder::decode as cbor_decode;
 

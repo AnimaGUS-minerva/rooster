@@ -56,7 +56,6 @@ use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::acp_interface::{RegistrarType};
-use crate::grasp::SessionID;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ProxiesEnabled {
