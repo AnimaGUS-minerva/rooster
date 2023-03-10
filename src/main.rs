@@ -48,11 +48,17 @@ async fn main() {
     println!("Read in args: {:?}\n", mainargs);
 
     let mut debug_options = crate::debugoptions::DebugOptions::default();
-    if mainargs.debug_graspmessages {
+    if mainargs.debug_interfaces {
         debug_options.debug_interfaces = true;
     }
-    if mainargs.debug_interfacedetail {
-        debug_options.verydebug_interfaces = true;
+    if mainargs.debug_registrars {
+        debug_options.debug_registrars = true;
+    }
+    if mainargs.debug_joininterfaces {
+        debug_options.debug_joininterfaces = true;
+    }
+    if mainargs.debug_proxyactions {
+        debug_options.debug_proxyactions   = true;
     }
     println!("Debug Interfaces is {}", debug_options.debug_interfaces);
 

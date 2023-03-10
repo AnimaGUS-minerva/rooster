@@ -122,7 +122,7 @@ impl AllInterfaces {
         let lh = am.header;
         let ifindex = lh.index;
 
-        mydebug.debug_verbose(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
+        mydebug.debug_interfaces(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
 
         let     ifna = self.get_entry_by_ifindex(ifindex).await;
         let mut ifn  = ifna.lock().await;
@@ -143,16 +143,16 @@ impl AllInterfaces {
                         continue;
                     }
                     ifn.linklocal6 = llv6;
-                    mydebug.debug_verbose(format!("llv6: {}", ifn.linklocal6)).await;
+                    mydebug.debug_interfaces(format!("llv6: {}", ifn.linklocal6)).await;
                 },
                 Nla::CacheInfo(_info) => { /* nothing */},
                 Nla::Flags(_info)     => { /* nothing */},
                 _ => {
-                    mydebug.debug_verbose(format!("data: {:?} ", nlas)).await;
+                    mydebug.debug_interfaces(format!("data: {:?} ", nlas)).await;
                 }
             }
         }
-        mydebug.debug_verbose(format!("")).await;
+        mydebug.debug_interfaces(format!("")).await;
     }
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
@@ -173,15 +173,15 @@ impl AllInterfaces {
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
-                        mydebug.debug_detailed(format!("ifname: {}", name)).await;
+                        mydebug.debug_interfaces_detailed(format!("ifname: {}", name)).await;
                         ifn.ifname = name;
                     },
                     Nla::Mtu(bytes) => {
-                        mydebug.debug_detailed(format!("mtu: {}", bytes)).await;
+                        mydebug.debug_interfaces_detailed(format!("mtu: {}", bytes)).await;
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_detailed(
+                        mydebug.debug_interfaces_detailed(
                             format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}",
                                     addrset[0], addrset[1],
                                     addrset[2], addrset[3],
@@ -189,7 +189,7 @@ impl AllInterfaces {
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
-                            mydebug.debug_verbose(format!("device {} is up", ifn.ifname)).await;
+                            mydebug.debug_interfaces(format!("device {} is up", ifn.ifname)).await;
                         }
                         ifn.oper_state = state;
                     },
@@ -209,15 +209,15 @@ impl AllInterfaces {
                     }
                 }
             }
-            mydebug.debug_verbose(format!("")).await;
+            //mydebug.debug_interfaces(format!("")).await;
             (old_oper_state, ifn.oper_state, ifn.ifname.clone())
         };
 
         // now process result values from,
         // looking for interfaces which are now up, and which were not up before
-        mydebug.debug_detailed(format!("ifn: {:?} old: {:?} new: {:?}",
-                                     &ifname, old_oper_state,
-                                     new_oper_state)).await;
+        mydebug.debug_interfaces_detailed(format!("ifn: {:?} old: {:?} new: {:?}",
+                                                  &ifname, old_oper_state,
+                                                  new_oper_state)).await;
         if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let mut ifn  = ifna.lock().await;
@@ -282,7 +282,9 @@ impl AllInterfaces {
         let mut cnt: u32 = 0;
         let debugextra = Arc::new(DebugOptions {
             debug_interfaces: debug.debug_interfaces,
-            verydebug_interfaces: true,
+            debug_registrars: debug.debug_registrars,
+            debug_joininterfaces: debug.debug_joininterfaces,
+            debug_proxyactions: debug.debug_proxyactions,
             debug_output: debug.debug_output.clone()
         });
 
@@ -363,7 +365,7 @@ impl AllInterfaces {
                     }
                     //_ => { println!("generic message type: {} skipped", payload.message_type()); }
                     _ => {
-                        debug.debug_verbose(format!("msg type: {:?}", payload)).await;
+                        debug.debug_interfaces_detailed(format!("msg type: {:?}", payload)).await;
                     }
                 }
             };
@@ -457,7 +459,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
@@ -643,9 +647,9 @@ pub mod tests {
         let mut options = RoosterOptions::default();
         let mut allif = lallif.lock().await;
         let debug = { allif.debug.clone() };
-        options.debug_graspmessages = true;
-        options.debug_interfacedetail = true;
-        options.debug_joinnetworks    = true;
+        options.debug_interfaces    = true;
+        options.debug_registrars    = true;
+        options.debug_joininterfaces  = true;
 
         options.add_acp_interface("eth0".to_string());
         options.add_joinlink_interface("join0".to_string());

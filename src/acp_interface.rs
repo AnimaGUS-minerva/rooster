@@ -176,7 +176,7 @@ impl AcpInterface {
         let mut found = self.registrars.iter_mut().find(|rm| { let r = &**rm;
                                                                r.addr == v6addr});
         if let Some(ref mut r) = found {
-            self.debug.debug_verbose(format!("   {} old item for {}", cnt, port_number)).await;
+            self.debug.debug_registrars_detailed(format!("   {} old item for {}", cnt, port_number)).await;
             r.last_announce = SystemTime::now();
             r.ttl = ttl;
             let mut found = false;
@@ -192,7 +192,7 @@ impl AcpInterface {
                 r.rtypes.push(rtype);
             }
         } else {
-            self.debug.debug_verbose(format!("   {} new item for {}", cnt, port_number)).await;
+            self.debug.debug_registrars(format!("   {} new item for {}", cnt, port_number)).await;
             let newone = Registrar { addr: IpAddr::V6(v6addr),
                                      last_announce: SystemTime::now(),
                                      rtypes: vec![rtype],
@@ -203,20 +203,20 @@ impl AcpInterface {
 
     pub async fn dump_registrar_list(self: &AcpInterface) {
         let regcnt = 1;
-        self.debug.debug_verbose("List of registrars:".to_string()).await;
+        self.debug.debug_registrars("List of registrars:".to_string()).await;
         for registrar in &self.registrars {
             for rtype in &registrar.rtypes {
                 match rtype {
                     RegistrarType::HTTPRegistrar{tcp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto HTTP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto HTTP",
                                                          regcnt, registrar.addr, tcp_port)).await;
                     },
                     RegistrarType::CoAPRegistrar{udp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto CoAP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto CoAP",
                                                          regcnt, registrar.addr, udp_port)).await;
                     },
                     RegistrarType::StatelessCoAPRegistrar{udp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto StatelessCoAP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto StatelessCoAP",
                                                          regcnt, registrar.addr, udp_port)).await;
                     }
                 }
@@ -225,9 +225,9 @@ impl AcpInterface {
     }
 
     pub async fn registrar_announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
-        self.debug.debug_verbose(format!("{} grasp mflood[{}] from {}", cnt,
-                                         graspmessage.session_id,
-                                         graspmessage.initiator)).await;
+        self.debug.debug_registrars(format!("{} grasp mflood[{}] from {}", cnt,
+                                            graspmessage.session_id,
+                                            graspmessage.initiator)).await;
 
         let mut objcnt = 1;
         let ttl = Duration::from_millis(graspmessage.ttl.into());
@@ -238,13 +238,13 @@ impl AcpInterface {
                 "none".to_string()
             };
 
-            self.debug.debug_verbose(format!("  {}.{} obj: {} ({})", cnt,
+            self.debug.debug_registrars(format!("  {}.{} obj: {} ({})", cnt,
                                              objcnt, objective.objective_name,
                                              objvaluestr)).await;
             if let Some(locator) = objective.locator {
                 match locator {
                     GraspLocator::O_IPv6_LOCATOR{ v6addr, transport_proto, port_number } => {
-                        self.debug.debug_verbose(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
+                        self.debug.debug_registrars(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
                                                          transport_proto, v6addr, port_number)).await;
 
                         match objective.objective_value {
@@ -270,14 +270,14 @@ impl AcpInterface {
                                 *invalidated=true;
                             },
                             _ => {
-                                self.debug.debug_verbose(format!("  {}.{} unknown objective value",
+                                self.debug.debug_registrars(format!("  {}.{} unknown objective value",
                                                                  cnt, objcnt)).await;
                                 return;
                             },
                         }
                     },
                     _ => {
-                        self.debug.debug_verbose(format!("  {}.{} other-type {:?}", cnt, objcnt,
+                        self.debug.debug_registrars(format!("  {}.{} other-type {:?}", cnt, objcnt,
                                                          locator)).await;
                         return;
                     }
@@ -290,7 +290,7 @@ impl AcpInterface {
 
     pub async fn announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
         // now we have a graspmessage which we'll do something with!
-        self.debug.debug_verbose(format!("{} grasp message: {:?}", cnt, graspmessage)).await;
+        self.debug.debug_registrars(format!("{} grasp message: {:?}", cnt, graspmessage)).await;
 
         if graspmessage.mtype == GraspMessageType::M_FLOOD {
             self.registrar_announce(cnt, graspmessage).await;
@@ -388,7 +388,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);

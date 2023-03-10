@@ -22,8 +22,10 @@ use futures::lock::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct DebugOptions {
-    pub debug_interfaces:  bool,
-    pub verydebug_interfaces:  bool,
+    pub debug_interfaces:      bool,       // interfaces added/removed
+    pub debug_registrars:      bool,       // registrars announces
+    pub debug_joininterfaces:  bool,       // join interface announcements
+    pub debug_proxyactions:    bool,       // proxy connections and activity
     pub debug_output:      Arc<Mutex<dyn Write + Send>>
 }
 
@@ -31,24 +33,58 @@ impl DebugOptions {
     pub fn default() -> DebugOptions {
         DebugOptions {
             debug_interfaces:  false,
-            verydebug_interfaces:  false,
+            debug_registrars:  false,
+            debug_joininterfaces:  false,
+            debug_proxyactions:    false,
             debug_output:      Arc::new(Mutex::new(io::stdout()))
         }
     }
 
-    pub async fn debug_verbose(self: &Self,
+    pub async fn debug_interfaces(self: &Self,
                                msg: String) {
         if self.debug_interfaces {
             let mut output = self.debug_output.lock().await;
-            writeln!(output, "D: {}", msg).unwrap();
+            writeln!(output, "I: {}", msg).unwrap();
         }
     }
 
-    pub async fn debug_detailed(self: &Self,
-                               msg: String) {
-        if self.verydebug_interfaces {
+    pub async fn debug_interfaces_detailed(self: &Self,
+                                           msg: String) {
+        if self.debug_interfaces {
             let mut output = self.debug_output.lock().await;
-            writeln!(output, "V: {}", msg).unwrap();
+            writeln!(output, "I: {}", msg).unwrap();
+        }
+    }
+
+    pub async fn debug_registrars(self: &Self,
+                               msg: String) {
+        if self.debug_registrars {
+            let mut output = self.debug_output.lock().await;
+            writeln!(output, "R: {}", msg).unwrap();
+        }
+    }
+
+    pub async fn debug_registrars_detailed(self: &Self,
+                                           msg: String) {
+        if self.debug_registrars {
+            let mut output = self.debug_output.lock().await;
+            writeln!(output, "R: {}", msg).unwrap();
+        }
+    }
+
+    pub async fn debug_joininterfaces(self: &Self,
+                                      msg: String) {
+        if self.debug_joininterfaces {
+            let mut output = self.debug_output.lock().await;
+            writeln!(output, "J: {}", msg).unwrap();
+        }
+    }
+
+    pub async fn debug_proxyactions(self: &Self,
+                                    msg: String) {
+        if self.debug_proxyactions {
+            let mut output = self.debug_output.lock().await;
+            writeln!(output, "P: {}", msg).unwrap();
         }
     }
 
@@ -89,7 +125,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
 
         aw!(atest_debug_info(awriter.clone(), db1)).unwrap();
@@ -101,6 +139,6 @@ pub mod tests {
 /*
  * Local Variables:
  * mode: rust
- * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
+ * compile-command: "cd .. && cargo test"
  * End:
  */

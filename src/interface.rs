@@ -135,7 +135,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);

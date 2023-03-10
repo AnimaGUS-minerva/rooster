@@ -159,8 +159,8 @@ impl JoinInterface {
         };
 
         if proxies.http_avail {
-            self.debug.debug_verbose(format!("HTTP Registrar at {}:{}",
-                                             initiator, self.https_port)).await;
+            self.debug.debug_joininterfaces(format!("HTTP Registrar at {}:{}",
+                                                    initiator, self.https_port)).await;
             gm.objectives.push(GraspObjective { objective_name: "AN_Proxy".to_string(),
                                                 objective_flags: 0,
                                                 loop_count: 1,
@@ -201,7 +201,7 @@ impl JoinInterface {
             }
         };
 
-        self.debug.debug_verbose(
+        self.debug.debug_joininterfaces(
             format!("sending GRASP DULL message about port {}", self.https_port)).await;
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
@@ -266,11 +266,11 @@ impl JoinInterface {
             let mut cnt: u32 = 0;
 
             loop {
-                debug.debug_verbose(format!("{} join loop: {:?}", cnt, https_listen_sock)).await;
+                debug.debug_joininterfaces(format!("{} join loop: {:?}", cnt, https_listen_sock)).await;
 
                 match https_listen_sock.accept().await {
                     Ok((socket, addr)) => {
-                        debug.debug_verbose(format!("new pledge client from: {:?} on {:?}",
+                        debug.debug_joininterfaces(format!("new pledge client from: {:?} on {:?}",
                                                     addr, socket)).await;
                         let ji3 = jil.clone();
                         let lallif3 = lallif.clone();
@@ -313,7 +313,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
