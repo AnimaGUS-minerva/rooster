@@ -79,16 +79,15 @@ impl Registrar {
 
 #[derive(Debug)]
 pub struct AcpInterface {
-    pub sock: UdpSocket,
     pub debug: Arc<DebugOptions>,
     pub invalidate: Arc<Mutex<bool>>,
     pub registrars: Vec<Registrar>
 }
 
 impl AcpInterface {
-    pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>, invalidate:Arc<Mutex<bool>>) -> AcpInterface {
+    pub fn default(debug: Arc<DebugOptions>, invalidate:Arc<Mutex<bool>>) -> AcpInterface {
         AcpInterface {
-            sock, debug,
+            debug,
             invalidate,
             registrars: vec![]
         }
@@ -115,14 +114,14 @@ impl AcpInterface {
     #[cfg(test)]
     pub async fn open_test_grasp_port(ifn: &Interface,
                                       _ifindex: IfIndex,
-                                      invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
+                                      invalidated: Arc<Mutex<bool>>) -> Result<(UdpSocket,AcpInterface), std::io::Error> {
         let recv = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
+        return Ok((recv, AcpInterface::default(ifn.debug.clone(), invalidated)));
     }
 
     pub async fn open_grasp_port(ifn: &Interface,
                                  ifindex: IfIndex,
-                                 invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
+                                 invalidated: Arc<Mutex<bool>>) -> Result<(UdpSocket,AcpInterface), std::io::Error> {
         use socket2::{Socket, Domain, Type};
 
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
@@ -144,7 +143,7 @@ impl AcpInterface {
                 let grasp_mcast = "FF02:0:0:0:0:0:0:13".parse::<Ipv6Addr>().unwrap();
                 recv.join_multicast_v6(&grasp_mcast, ifindex).unwrap();
 
-                return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
+                return Ok((recv, AcpInterface::default(ifn.debug.clone(), invalidated)));
             },
             Err(err) => {
                 if err.kind() == ErrorKind::AddrInUse {
@@ -299,15 +298,15 @@ impl AcpInterface {
 
     pub async fn start_daemon(ifn: &Interface, invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
         #[cfg(test)]
-        let ai = AcpInterface::open_test_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
+        let (sock, ai) = AcpInterface::open_test_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         #[cfg(not(test))]
-        let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
+        let (sock, ai) = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
         let ai2 = ail.clone();
 
-        // ail gets moved into the async loop
+        // ail gets moved into the async loop, as well as sock!
 
         tokio::spawn(async move {
             let mut cnt: u32 = 0;
@@ -315,18 +314,14 @@ impl AcpInterface {
             loop {
                 let mut bufbytes = [0u8; 2048];
 
-                //if debug_graspdaemon {
-                //}
-
-                // lock it, read from it and return result
-                let (results,debug) = {
+                // lock it, grab debug
+                let debug = {
                     let ai = ail.lock().await;
-                    //println!("listening on GRASP socket {:?}", ai.sock);
-                    let res = ai.sock.recv_from(&mut bufbytes).await;
-                    let debug = ai.debug.clone();
-                    //println!("got answer from GRASP socket {:?}", ai.sock);
-                    (res,debug)
+                    ai.debug.clone()
                 };
+
+                // the socket is no longer locked, we own it.
+                let results = sock.recv_from(&mut bufbytes).await;
 
                 match results {
                     Ok((size, addr)) => {
@@ -511,7 +506,7 @@ pub mod tests {
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= msg1();
         let    (ifn,_awriter,_allif) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
 
@@ -539,7 +534,7 @@ pub mod tests {
     async fn async_process_mflood2() -> Result<(), std::io::Error> {
         let    (ifn,awriter, _allif) = setup_ifn();
 
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
@@ -566,7 +561,7 @@ pub mod tests {
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
         let    (ifn,awriter, _allif) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 1);
@@ -587,7 +582,7 @@ pub mod tests {
 
     async fn async_process_mflood13() -> Result<(), std::io::Error> {
         let    (ifn,awriter, _allif) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
