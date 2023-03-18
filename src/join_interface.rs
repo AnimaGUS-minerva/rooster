@@ -232,9 +232,18 @@ impl JoinInterface {
             match TcpStream::connect(target_sockaddr).await {
                 Ok(mut conn) => {
                     // Bidirectional copy
-                    let (n1, n2) = tokio::io::copy_bidirectional(&mut socket, &mut conn).await?;
-                    debug.debug_info(format!("copied {} / {} bytes between streams", n1,n2)).await;
-                    return Ok(())
+                    let result = tokio::io::copy_bidirectional(&mut socket, &mut conn).await;
+                    match result {
+                        Ok((n1, n2)) => {
+                            debug.debug_info(format!("copied {} / {} bytes between streams", n1,n2)).await;
+                            return Ok(())
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
+                            debug.debug_info(format!("connection ended prematurely")).await;
+                            return Ok(())
+                        },
+                        Err(e) => { return Err(e) }
+                    }
                 },
                 Err(e) if e.kind() == std::io::ErrorKind::NotConnected => { return Ok(()) },
                 Err(e)   => {
