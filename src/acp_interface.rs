@@ -56,13 +56,14 @@ pub const BRSKI_HTTP_OBJECTIVE: &str = "BRSKI";
 pub const BRSKI_COAP_OBJECTIVE: &str = "BRSKI_JP";
 pub const BRSKI_JPY_OBJECTIVE:  &str = "BRSKI_RJP";
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug,Copy, Clone, PartialEq)]
 pub enum RegistrarType {
     HTTPRegistrar{tcp_port: u16},
     CoAPRegistrar{udp_port: u16},
     StatelessCoAPRegistrar{udp_port: u16},
 }
 
+#[derive(Debug)]
 pub struct Registrar {
     pub rtypes: Vec<RegistrarType>,
     pub addr: IpAddr,
@@ -76,17 +77,17 @@ impl Registrar {
     }
 }
 
+#[derive(Debug)]
 pub struct AcpInterface {
-    pub sock: UdpSocket,
     pub debug: Arc<DebugOptions>,
     pub invalidate: Arc<Mutex<bool>>,
     pub registrars: Vec<Registrar>
 }
 
 impl AcpInterface {
-    pub fn default(sock: UdpSocket, debug: Arc<DebugOptions>, invalidate:Arc<Mutex<bool>>) -> AcpInterface {
+    pub fn default(debug: Arc<DebugOptions>, invalidate:Arc<Mutex<bool>>) -> AcpInterface {
         AcpInterface {
-            sock, debug,
+            debug,
             invalidate,
             registrars: vec![]
         }
@@ -113,14 +114,14 @@ impl AcpInterface {
     #[cfg(test)]
     pub async fn open_test_grasp_port(ifn: &Interface,
                                       _ifindex: IfIndex,
-                                      invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
+                                      invalidated: Arc<Mutex<bool>>) -> Result<(UdpSocket,AcpInterface), std::io::Error> {
         let recv = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
+        return Ok((recv, AcpInterface::default(ifn.debug.clone(), invalidated)));
     }
 
     pub async fn open_grasp_port(ifn: &Interface,
                                  ifindex: IfIndex,
-                                 invalidated: Arc<Mutex<bool>>) -> Result<AcpInterface, std::io::Error> {
+                                 invalidated: Arc<Mutex<bool>>) -> Result<(UdpSocket,AcpInterface), std::io::Error> {
         use socket2::{Socket, Domain, Type};
 
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
@@ -142,7 +143,7 @@ impl AcpInterface {
                 let grasp_mcast = "FF02:0:0:0:0:0:0:13".parse::<Ipv6Addr>().unwrap();
                 recv.join_multicast_v6(&grasp_mcast, ifindex).unwrap();
 
-                return Ok(AcpInterface::default(recv, ifn.debug.clone(), invalidated));
+                return Ok((recv, AcpInterface::default(ifn.debug.clone(), invalidated)));
             },
             Err(err) => {
                 if err.kind() == ErrorKind::AddrInUse {
@@ -174,7 +175,7 @@ impl AcpInterface {
         let mut found = self.registrars.iter_mut().find(|rm| { let r = &**rm;
                                                                r.addr == v6addr});
         if let Some(ref mut r) = found {
-            self.debug.debug_verbose(format!("   {} old item for {}", cnt, port_number)).await;
+            self.debug.debug_registrars_detailed(format!("   {} old item for {}", cnt, port_number)).await;
             r.last_announce = SystemTime::now();
             r.ttl = ttl;
             let mut found = false;
@@ -190,7 +191,7 @@ impl AcpInterface {
                 r.rtypes.push(rtype);
             }
         } else {
-            self.debug.debug_verbose(format!("   {} new item for {}", cnt, port_number)).await;
+            self.debug.debug_registrars(format!("   {} new item for {}", cnt, port_number)).await;
             let newone = Registrar { addr: IpAddr::V6(v6addr),
                                      last_announce: SystemTime::now(),
                                      rtypes: vec![rtype],
@@ -201,20 +202,20 @@ impl AcpInterface {
 
     pub async fn dump_registrar_list(self: &AcpInterface) {
         let regcnt = 1;
-        self.debug.debug_verbose("List of registrars:".to_string()).await;
+        self.debug.debug_registrars("List of registrars:".to_string()).await;
         for registrar in &self.registrars {
             for rtype in &registrar.rtypes {
                 match rtype {
                     RegistrarType::HTTPRegistrar{tcp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto HTTP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto HTTP",
                                                          regcnt, registrar.addr, tcp_port)).await;
                     },
                     RegistrarType::CoAPRegistrar{udp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto CoAP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto CoAP",
                                                          regcnt, registrar.addr, udp_port)).await;
                     },
                     RegistrarType::StatelessCoAPRegistrar{udp_port} => {
-                        self.debug.debug_verbose(format!("  {} announced from [{}]:{} proto StatelessCoAP",
+                        self.debug.debug_registrars(format!("  {} announced from [{}]:{} proto StatelessCoAP",
                                                          regcnt, registrar.addr, udp_port)).await;
                     }
                 }
@@ -223,9 +224,9 @@ impl AcpInterface {
     }
 
     pub async fn registrar_announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
-        self.debug.debug_verbose(format!("{} grasp mflood[{}] from {}", cnt,
-                                         graspmessage.session_id,
-                                         graspmessage.initiator)).await;
+        self.debug.debug_registrars(format!("{} grasp mflood[{}] from {}", cnt,
+                                            graspmessage.session_id,
+                                            graspmessage.initiator)).await;
 
         let mut objcnt = 1;
         let ttl = Duration::from_millis(graspmessage.ttl.into());
@@ -236,13 +237,13 @@ impl AcpInterface {
                 "none".to_string()
             };
 
-            self.debug.debug_verbose(format!("  {}.{} obj: {} ({})", cnt,
+            self.debug.debug_registrars(format!("  {}.{} obj: {} ({})", cnt,
                                              objcnt, objective.objective_name,
                                              objvaluestr)).await;
             if let Some(locator) = objective.locator {
                 match locator {
                     GraspLocator::O_IPv6_LOCATOR{ v6addr, transport_proto, port_number } => {
-                        self.debug.debug_verbose(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
+                        self.debug.debug_registrars(format!("  {}.{} type:IPv6({}) [{}]:{}", cnt, objcnt,
                                                          transport_proto, v6addr, port_number)).await;
 
                         match objective.objective_value {
@@ -268,14 +269,14 @@ impl AcpInterface {
                                 *invalidated=true;
                             },
                             _ => {
-                                self.debug.debug_verbose(format!("  {}.{} unknown objective value",
+                                self.debug.debug_registrars(format!("  {}.{} unknown objective value",
                                                                  cnt, objcnt)).await;
                                 return;
                             },
                         }
                     },
                     _ => {
-                        self.debug.debug_verbose(format!("  {}.{} other-type {:?}", cnt, objcnt,
+                        self.debug.debug_registrars(format!("  {}.{} other-type {:?}", cnt, objcnt,
                                                          locator)).await;
                         return;
                     }
@@ -288,7 +289,7 @@ impl AcpInterface {
 
     pub async fn announce(self: &mut AcpInterface, cnt: u32, graspmessage: GraspMessage) {
         // now we have a graspmessage which we'll do something with!
-        self.debug.debug_verbose(format!("{} grasp message: {:?}", cnt, graspmessage)).await;
+        self.debug.debug_registrars(format!("{} grasp message: {:?}", cnt, graspmessage)).await;
 
         if graspmessage.mtype == GraspMessageType::M_FLOOD {
             self.registrar_announce(cnt, graspmessage).await;
@@ -297,15 +298,15 @@ impl AcpInterface {
 
     pub async fn start_daemon(ifn: &Interface, invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<AcpInterface>>, rtnetlink::Error> {
         #[cfg(test)]
-        let ai = AcpInterface::open_test_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
+        let (sock, ai) = AcpInterface::open_test_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         #[cfg(not(test))]
-        let ai = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
+        let (sock, ai) = AcpInterface::open_grasp_port(ifn, ifn.ifindex, invalidate).await.unwrap();
 
         let ail = Arc::new(Mutex::new(ai));
         let ai2 = ail.clone();
 
-        // ail gets moved into the async loop
+        // ail gets moved into the async loop, as well as sock!
 
         tokio::spawn(async move {
             let mut cnt: u32 = 0;
@@ -313,18 +314,14 @@ impl AcpInterface {
             loop {
                 let mut bufbytes = [0u8; 2048];
 
-                //if debug_graspdaemon {
-                //}
-
-                // lock it, read from it and return result
-                let (results,debug) = {
+                // lock it, grab debug
+                let debug = {
                     let ai = ail.lock().await;
-                    //println!("listening on GRASP socket {:?}", ai.sock);
-                    let res = ai.sock.recv_from(&mut bufbytes).await;
-                    let debug = ai.debug.clone();
-                    //println!("got answer from GRASP socket {:?}", ai.sock);
-                    (res,debug)
+                    ai.debug.clone()
                 };
+
+                // the socket is no longer locked, we own it.
+                let results = sock.recv_from(&mut bufbytes).await;
 
                 match results {
                     Ok((size, addr)) => {
@@ -386,7 +383,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
@@ -394,16 +393,16 @@ pub mod tests {
         (awriter, all1)
     }
 
-    fn setup_ifn() -> (Interface,Arc<Mutex<Vec<u8>>>) {
+    fn setup_ifn() -> (Interface,Arc<Mutex<Vec<u8>>>,AllInterfaces) {
         let (awriter, all1) = setup_ai();
-        let mut ifn = Interface::default(all1.debug);
+        let mut ifn = Interface::default(all1.debug.clone());
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
-        (ifn,awriter)
+        (ifn,awriter,all1)
     }
 
     fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
@@ -411,7 +410,7 @@ pub mod tests {
     }
 
     async fn async_start_acp() -> Result<(), std::io::Error> {
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,_awriter,_allif) = setup_ifn();
         AcpInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
@@ -424,7 +423,7 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        let    (ifn,_awriter) = setup_ifn();
+        let    (ifn,_awriter,_allif) = setup_ifn();
         // ifindex=1, is lo
         let _aifn = AcpInterface::open_grasp_port(&ifn, 1, Arc::new(Mutex::new(true))).await.unwrap();
         Ok(())
@@ -506,8 +505,8 @@ pub mod tests {
     // results a single registrar being processed
     async fn async_process_mflood1() -> Result<(), std::io::Error> {
         let m1= msg1();
-        let    (ifn,_awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let    (ifn,_awriter,_allif) = setup_ifn();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         assert_eq!(aifn.registrars.len(), 1);
 
@@ -533,9 +532,9 @@ pub mod tests {
     // results a single registrar being processed, then feed the same announcement
     // (different session_id), and that it results in still a single entry.
     async fn async_process_mflood2() -> Result<(), std::io::Error> {
-        let    (ifn,awriter) = setup_ifn();
+        let    (ifn,awriter, _allif) = setup_ifn();
 
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
@@ -561,8 +560,8 @@ pub mod tests {
 
     async fn async_process_mflood3() -> Result<(), std::io::Error> {
         let m1= msg3();
-        let    (ifn,awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let    (ifn,awriter, _allif) = setup_ifn();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
         aifn.registrar_announce(1, m1).await;
         dump_debug(awriter).await;
         assert_eq!(aifn.registrars.len(), 1);
@@ -570,6 +569,8 @@ pub mod tests {
         // calculate what kind exists now: should be http, coap and jpy
         assert_eq!(aifn.calculate_available_registrar().await, (true, true, true));
 
+        // now see about looking for a registrar to use.
+        //let target_acp = allif.;
         Ok(())
     }
 
@@ -580,8 +581,8 @@ pub mod tests {
     }
 
     async fn async_process_mflood13() -> Result<(), std::io::Error> {
-        let    (ifn,awriter) = setup_ifn();
-        let mut aifn = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
+        let    (ifn,awriter, _allif) = setup_ifn();
+        let (_sock, mut aifn) = AcpInterface::open_grasp_port(&ifn, 1,Arc::new(Mutex::new(true))).await.unwrap();
 
         let m1= msg1();
         aifn.registrar_announce(1, m1).await;
@@ -609,6 +610,6 @@ pub mod tests {
 /*
  * Local Variables:
  * mode: rust
- * compile-command: "cd .. && RUSTFLAGS='-A dead_code -Awarnings' cargo build"
+ * compile-command: "cd .. && cargo test"
  * End:
  */

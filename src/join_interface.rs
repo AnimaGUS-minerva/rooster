@@ -22,9 +22,8 @@
 
 extern crate moz_cbor as cbor;
 
-//use tokio::net::{UdpSocket, TcpSocket, TcpListener};
 use tokio::time::{sleep, Duration};
-use tokio::net::{UdpSocket, TcpListener};
+use tokio::net::{UdpSocket, TcpListener, TcpStream};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
@@ -33,7 +32,7 @@ use std::sync::Arc;
 use futures::lock::Mutex;
 //use tokio::process::{Command};
 use socket2::{Socket, Domain, Type};
-use netlink_packet_sock_diag::constants::{IPPROTO_TCP, IPPROTO_UDP};
+use netlink_packet_sock_diag::constants::{IPPROTO_TCP};
 
 //use cbor::decoder::decode as cbor_decode;
 
@@ -42,17 +41,23 @@ use netlink_packet_sock_diag::constants::{IPPROTO_TCP, IPPROTO_UDP};
 use crate::interface::Interface;
 use crate::interface::IfIndex;
 use crate::interfaces::ProxiesEnabled;
+use crate::interfaces::AllInterfaces;
 use crate::grasp::{SessionID, GraspMessage, GraspObjective, GraspLocator, GraspMessageType};
 use crate::debugoptions::DebugOptions;
 
-pub struct JoinInterface {
-    pub debug:      Arc<DebugOptions>,
-    pub grasp_sock: UdpSocket,
+pub struct JoinSockets {
     pub stateless_sock: UdpSocket,
     pub stateful_sock: UdpSocket,
-    pub https_sock: TcpListener,     pub https_v6addr: Ipv6Addr, pub https_port: u16
-
+    pub https_sock: TcpListener,
 }
+
+pub struct JoinInterface {
+    pub debug:      Arc<DebugOptions>,
+    pub https_v6addr: Ipv6Addr,
+    pub https_port:   u16,
+    pub grasp_sock: UdpSocket,
+}
+
 
 impl JoinInterface {
     fn open_bound_udpsocket(ifindex: IfIndex, _socknum: u16) -> Result<tokio::net::UdpSocket, std::io::Error> {
@@ -82,10 +87,10 @@ impl JoinInterface {
         }
     }
 
-    fn open_bound_tcpsocket(ifindex: IfIndex, socknum: u16) -> Result<tokio::net::TcpListener, std::io::Error> {
+    fn open_bound_tcpsocket(ifindex: IfIndex, portnum: u16) -> Result<tokio::net::TcpListener, std::io::Error> {
         /* bind this to the IPv6 Link Local address by IFINDEX */
         let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
-                                      socknum, 0, ifindex);
+                                      portnum, 0, ifindex);
 
         // create a TCP socket
         let rawfd = Socket::new(Domain::ipv6(), Type::stream(), None).unwrap();
@@ -94,8 +99,11 @@ impl JoinInterface {
         rawfd.set_reuse_port(true).unwrap();
         rawfd.set_reuse_address(true).unwrap();
         rawfd.set_nonblocking(true).unwrap();
-        match rawfd.bind(&socket2::SockAddr::from(rsin6)) {
+        let sock6 = &socket2::SockAddr::from(rsin6);
+        //println!("tcp socket: index: {} {:?}, {:?}", ifindex, rawfd, sock6);
+        match rawfd.bind(sock6) {
             Ok(()) => {
+                rawfd.listen(128)?;
                 let listener = TcpListener::from_std(rawfd.into())?;
                 Ok(listener)
             },
@@ -109,7 +117,7 @@ impl JoinInterface {
     }
 
     pub async fn open_ports(debug: Arc<DebugOptions>,
-                            ifindex: IfIndex) -> Result<JoinInterface, std::io::Error> {
+                            ifindex: IfIndex) -> Result<(JoinInterface,JoinSockets), std::io::Error> {
 
         let grasp_sock     = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
         let stateless_sock = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
@@ -122,11 +130,15 @@ impl JoinInterface {
             _ => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "must be IPv6".to_string())) },
         };
 
-        return Ok(JoinInterface {
+        return Ok((JoinInterface {
             debug,
-            grasp_sock,stateless_sock,stateful_sock,
-            https_sock, https_v6addr, https_port
-        })
+            grasp_sock,
+            https_v6addr, https_port
+        }, JoinSockets {
+            stateless_sock,
+            stateful_sock,
+            https_sock
+        }))
     }
 
     // make an announcement of that kind of registrar.
@@ -147,8 +159,8 @@ impl JoinInterface {
         };
 
         if proxies.http_avail {
-            self.debug.debug_verbose(format!("HTTP Registrar at {}:{}",
-                                             self.https_v6addr, self.https_port)).await;
+            self.debug.debug_joininterfaces(format!("HTTP Registrar at {}:{}",
+                                                    initiator, self.https_port)).await;
             gm.objectives.push(GraspObjective { objective_name: "AN_Proxy".to_string(),
                                                 objective_flags: 0,
                                                 loop_count: 1,
@@ -189,7 +201,6 @@ impl JoinInterface {
             }
         };
 
-        self.debug.debug_verbose("sending GRASP DULL message".to_string()).await;
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
                                                                  0,0,
@@ -200,34 +211,97 @@ impl JoinInterface {
         Ok(())
     }
 
+    pub async fn proxy_https(lji: Arc<Mutex<JoinInterface>>,
+                             lallif: Arc<Mutex<AllInterfaces>>,
+                             mut socket: tokio::net::TcpStream,
+                             pledgeaddr: std::net::SocketAddr) -> Result<(), std::io::Error> {
+        let debug = {
+            let ji = lji.lock().await;
+            ji.debug.clone()
+        };
+
+        debug.debug_info(format!("new pledge {} looking for Registrar", pledgeaddr)).await;
+
+        let some_target = AllInterfaces::locked_pick_available_https_registrar(lallif).await;
+
+        debug.debug_info(format!("new pledge {} found a Registrar {:?}", pledgeaddr, some_target)).await;
+
+        // need to find a useful Registrar to connect to.
+        if let Some(target_sockaddr) = some_target {
+            debug.debug_info(format!("new pledge {} connects to {}", pledgeaddr, target_sockaddr)).await;
+            match TcpStream::connect(target_sockaddr).await {
+                Ok(mut conn) => {
+                    // Bidirectional copy
+                    let result = tokio::io::copy_bidirectional(&mut socket, &mut conn).await;
+                    match result {
+                        Ok((n1, n2)) => {
+                            debug.debug_info(format!("copied {} / {} bytes between streams", n1,n2)).await;
+                            return Ok(())
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
+                            debug.debug_info(format!("connection ended prematurely")).await;
+                            return Ok(())
+                        },
+                        Err(e) => { return Err(e) }
+                    }
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotConnected => { return Ok(()) },
+                Err(e)   => {
+                    debug.debug_error(
+                        format!("did not connect to Registrar: {}",e)).await;
+                    return Err(e);
+                }
+            }
+        } else {
+            debug.debug_info(format!("no available ACP Registrar for new pledge {}", pledgeaddr)).await;
+            return Ok(());
+        }
+    }
+
     pub async fn start_daemon(ifn: &Interface,
+                              lallif: Arc<Mutex<AllInterfaces>>,
                               _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
-        let ai = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
+        let (ji,js) = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
 
-        let ail = Arc::new(Mutex::new(ai));
-        let ai2 = ail.clone();
+        let jil = Arc::new(Mutex::new(ji));
+        let ji2 = jil.clone();
+        let debug = ifn.debug.clone();
 
-        // ail gets moved into the async loop
+        // move into variables whichwill get captured into three async threads
+        let (_stateless_sock, _stateful_sock, https_listen_sock) = {
+            (js.stateless_sock, js.stateful_sock, js.https_sock)
+        };
 
+        // jil and debug gets moved into the async loop
         tokio::spawn(async move {
             let mut cnt: u32 = 0;
 
             loop {
-                //let mut bufbytes = [0u8; 2048];
+                debug.debug_joininterfaces(format!("{} join loop: {:?}", cnt, https_listen_sock)).await;
 
-                //if debug_graspdaemon {
-                //}
-
-                println!("{} join loop: ", cnt);
-                sleep(Duration::from_millis(6000)).await;
-
+                match https_listen_sock.accept().await {
+                    Ok((socket, addr)) => {
+                        debug.debug_joininterfaces(format!("new pledge client from: {:?} on {:?}",
+                                                    addr, socket)).await;
+                        let ji3 = jil.clone();
+                        let lallif3 = lallif.clone();
+                        /* move ji3, lallif3, socket and addr */
+                        tokio::spawn(async move {
+                            JoinInterface::proxy_https(ji3, lallif3, socket, addr).await.expect("connection failure");
+                        });
+                    },
+                    Err(e) => {
+                        debug.debug_error(format!("couldn't get client: {:?}", e)).await;
+                        sleep(Duration::from_millis(5000)).await;
+                    },
+                }
                 cnt += 1;
             }
 
         });
 
-        Ok(ai2)
+        Ok(ji2)
     }
 
 }
@@ -251,7 +325,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
@@ -259,9 +335,9 @@ pub mod tests {
         (awriter, all1)
     }
 
-    fn setup_ifn() -> Interface {
+    fn setup_ifn() -> (Interface,AllInterfaces) {
         let (_awriter, all1) = setup_ai();
-        let mut ifn = Interface::default(all1.debug);
+        let mut ifn = Interface::default(all1.debug.clone());
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
@@ -269,7 +345,7 @@ pub mod tests {
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
         ifn.join_daemon = None;
-        ifn
+        (ifn, all1)
     }
 
     fn setup_invalidated_bool() -> Arc<Mutex<bool>> {
@@ -277,8 +353,9 @@ pub mod tests {
     }
 
     async fn async_start_join() -> Result<(), std::io::Error> {
-        let     ifn = setup_ifn();
-        JoinInterface::start_daemon(&ifn, setup_invalidated_bool()).await.unwrap();
+        let (ifn,all1) = setup_ifn();
+        let lall = Arc::new(Mutex::new(all1));
+        JoinInterface::start_daemon(&ifn, lall.clone(), setup_invalidated_bool()).await.unwrap();
         Ok(())
     }
 
@@ -290,9 +367,9 @@ pub mod tests {
     }
 
     async fn async_open_socket() -> Result<(), std::io::Error> {
-        let ifn = setup_ifn();
+        let (ifn,_all1) = setup_ifn();
         // ifindex=1, is lo
-        let _aifn = JoinInterface::open_ports(ifn.debug, 1).await.unwrap();
+        let (_aifn,_js) = JoinInterface::open_ports(ifn.debug, 1).await.unwrap();
         Ok(())
     }
 

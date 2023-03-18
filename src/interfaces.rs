@@ -24,9 +24,10 @@
 // list if the list is empty, otherwise, they are ignored
 //
 
-use std::net::Ipv6Addr;
+use std::net::{Ipv6Addr, IpAddr, SocketAddr};
 use std::collections::HashMap;
 use std::sync::Arc;
+//use chrono;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
@@ -36,7 +37,7 @@ use rtnetlink::{
     Handle,
     Error,
     new_connection,
-    sys::{AsyncSocket, SocketAddr},
+    sys::{AsyncSocket}
 };
 use netlink_packet_route::{
     NetlinkPayload::InnerMessage,
@@ -55,9 +56,9 @@ use crate::debugoptions::DebugOptions;
 use crate::args::RoosterOptions;
 use crate::interface::Interface;
 use crate::interface::IfIndex;
-use crate::grasp::SessionID;
+use crate::acp_interface::{RegistrarType};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProxiesEnabled {
     pub http_avail:      bool,
     pub stateful_avail:  bool,  // CoAPS
@@ -82,7 +83,16 @@ pub struct AllInterfaces {
     pub proxies:         ProxiesEnabled,
     pub interfaces:      HashMap<IfIndex, Arc<Mutex<Interface>>>,
     pub acp_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>,
-    pub joinlink_interfaces:  HashMap<IfIndex, Arc<Mutex<Interface>>>
+    // this needs a mutex on it so that the announce iteration loop
+    // can run without taking a lock on AllInterfaces.
+    pub joinlink_interfaces:  Arc<Mutex<HashMap<IfIndex, Arc<Mutex<Interface>>>>>
+}
+
+fn sockaddr_from_addr(n1: IpAddr, port: u16) -> SocketAddr {
+    match n1 {
+        IpAddr::V4(v4addr) => { SocketAddr::new(IpAddr::V4(v4addr), port) },
+        IpAddr::V6(v6addr) => { SocketAddr::new(IpAddr::V6(v6addr), port) },
+    }
 }
 
 impl AllInterfaces {
@@ -94,13 +104,8 @@ impl AllInterfaces {
             proxies:    ProxiesEnabled::default(),
             interfaces: HashMap::new(),
             acp_interfaces: HashMap::new(),
-            joinlink_interfaces: HashMap::new()
+            joinlink_interfaces: Arc::new(Mutex::new(HashMap::new()))
         }
-    }
-
-    pub async fn next_session_id(self: &AllInterfaces) -> SessionID {
-        let next_one = rand::random::<u32>();
-        return next_one;
     }
 
     pub async fn get_entry_by_ifindex<'a>(self: &'a mut AllInterfaces, ifindex: IfIndex) -> Arc<Mutex<Interface>> {
@@ -118,7 +123,7 @@ impl AllInterfaces {
         let lh = am.header;
         let ifindex = lh.index;
 
-        mydebug.debug_verbose(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
+        mydebug.debug_interfaces(format!("ifindex: {} family: {}", ifindex, lh.family)).await;
 
         let     ifna = self.get_entry_by_ifindex(ifindex).await;
         let mut ifn  = ifna.lock().await;
@@ -139,19 +144,20 @@ impl AllInterfaces {
                         continue;
                     }
                     ifn.linklocal6 = llv6;
-                    mydebug.debug_verbose(format!("llv6: {}", ifn.linklocal6)).await;
+                    mydebug.debug_interfaces(format!("llv6: {}", ifn.linklocal6)).await;
                 },
                 Nla::CacheInfo(_info) => { /* nothing */},
                 Nla::Flags(_info)     => { /* nothing */},
                 _ => {
-                    mydebug.debug_verbose(format!("data: {:?} ", nlas)).await;
+                    mydebug.debug_interfaces(format!("data: {:?} ", nlas)).await;
                 }
             }
         }
-        mydebug.debug_verbose(format!("")).await;
+        mydebug.debug_interfaces(format!("")).await;
     }
 
     pub async fn store_link_info<'a>(self: &'a mut AllInterfaces,
+                                     allif: Arc<Mutex<AllInterfaces>>,
                                      options: &RoosterOptions,
                                      mydebug: Arc<DebugOptions>,
                                      lm: LinkMessage) {
@@ -168,15 +174,15 @@ impl AllInterfaces {
                 use netlink_packet_route::link::nlas::Nla;
                 match nlas {
                     Nla::IfName(name) => {
-                        mydebug.debug_detailed(format!("ifname: {}", name)).await;
+                        mydebug.debug_interfaces_detailed(format!("ifname: {}", name)).await;
                         ifn.ifname = name;
                     },
                     Nla::Mtu(bytes) => {
-                        mydebug.debug_detailed(format!("mtu: {}", bytes)).await;
+                        mydebug.debug_interfaces_detailed(format!("mtu: {}", bytes)).await;
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_detailed(
+                        mydebug.debug_interfaces_detailed(
                             format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}",
                                     addrset[0], addrset[1],
                                     addrset[2], addrset[3],
@@ -184,7 +190,7 @@ impl AllInterfaces {
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
-                            mydebug.debug_verbose(format!("device {} is up", ifn.ifname)).await;
+                            mydebug.debug_interfaces(format!("device {} is up", ifn.ifname)).await;
                         }
                         ifn.oper_state = state;
                     },
@@ -204,15 +210,15 @@ impl AllInterfaces {
                     }
                 }
             }
-            mydebug.debug_verbose(format!("")).await;
+            //mydebug.debug_interfaces(format!("")).await;
             (old_oper_state, ifn.oper_state, ifn.ifname.clone())
         };
 
         // now process result values from,
         // looking for interfaces which are now up, and which were not up before
-        mydebug.debug_detailed(format!("ifn: {:?} old: {:?} new: {:?}",
-                                     &ifname, old_oper_state,
-                                     new_oper_state)).await;
+        mydebug.debug_interfaces_detailed(format!("ifn: {:?} old: {:?} new: {:?}",
+                                                  &ifname, old_oper_state,
+                                                  new_oper_state)).await;
         if old_oper_state != State::Up && new_oper_state == State::Up {
             let     ifna = self.get_entry_by_ifindex(ifindex).await;
             let mut ifn  = ifna.lock().await;
@@ -229,11 +235,13 @@ impl AllInterfaces {
             }
 
             if options.is_valid_joinlink_interface(&ifname) {
-                self.joinlink_interfaces.entry(ifindex).or_insert_with(|| {
+                let mut ji_hash = self.joinlink_interfaces.lock().await;
+                ji_hash.entry(ifindex).or_insert_with(|| {
                     ifna.clone()
                 });
                 mydebug.debug_info(format!("device {} now up as Join Interface", ifn.ifname)).await;
-                ifn.start_joinlink(options, mydebug.clone(), self.invalidate_avail.clone()).await;
+                ifn.start_joinlink(allif.clone(), options,
+                                   mydebug.clone(), self.invalidate_avail.clone()).await;
                 used = used + 1;
             }
 
@@ -262,7 +270,7 @@ impl AllInterfaces {
                                   lm: LinkMessage) -> Result<(), Error> {
         let mut allif   = lallif.lock().await;
 
-        allif.store_link_info(options, debug, lm).await;
+        allif.store_link_info(lallif.clone(), options, debug, lm).await;
         Ok(())
     }
 
@@ -275,18 +283,29 @@ impl AllInterfaces {
         let mut cnt: u32 = 0;
         let debugextra = Arc::new(DebugOptions {
             debug_interfaces: debug.debug_interfaces,
-            verydebug_interfaces: true,
+            debug_registrars: debug.debug_registrars,
+            debug_joininterfaces: debug.debug_joininterfaces,
+            debug_proxyactions: debug.debug_proxyactions,
             debug_output: debug.debug_output.clone()
         });
 
         debug.debug_info(format!("scanning existing interfaces")).await;
 
         while let Some(link) = list.try_next().await.unwrap() {
-            debug.debug_info(format!("scan message {}", cnt)).await;
+            debug.debug_info(format!("link message {}", cnt)).await;
             AllInterfaces::gather_link_info(&lallif,
                                             &options,
                                             debugextra.clone(),
                                             link).await.unwrap();
+            cnt += 1;
+        }
+
+        let mut list = handle.address().get().execute();
+        while let Some(addr) = list.try_next().await.unwrap() {
+            debug.debug_info(format!("addr message {}", cnt)).await;
+            AllInterfaces::gather_addr_info(&lallif,
+                                            &options,
+                                            addr).await.unwrap();
             cnt += 1;
         }
         Ok(())
@@ -313,7 +332,7 @@ impl AllInterfaces {
             let mgroup_flags = RTMGRP_IPV6_ROUTE | RTMGRP_IPV6_IFADDR | RTMGRP_LINK;
 
             // A netlink socket address is created with said flags.
-            let addr = SocketAddr::new(0, mgroup_flags);
+            let addr = rtnetlink::sys::SocketAddr::new(0, mgroup_flags);
 
             // Said address is bound so new connections and
             // thus new message broadcasts can be received.
@@ -356,7 +375,7 @@ impl AllInterfaces {
                     }
                     //_ => { println!("generic message type: {} skipped", payload.message_type()); }
                     _ => {
-                        debug.debug_verbose(format!("msg type: {:?}", payload)).await;
+                        debug.debug_interfaces_detailed(format!("msg type: {:?}", payload)).await;
                     }
                 }
             };
@@ -394,6 +413,39 @@ impl AllInterfaces {
         }
     }
 
+    pub async fn pick_available_https_registrar(self: &AllInterfaces) -> Option<SocketAddr> {
+        for lifn in self.acp_interfaces.values() {
+            //println!("interfaces locking {:?}", chrono::offset::Local::now());
+            let ifn = lifn.lock().await;
+            if let Some(lai) = &ifn.acp_daemon {
+                //println!("acp_interfaces locking {:?}", chrono::offset::Local::now());
+                let ai = lai.lock().await;
+                //println!("searching {:?} at {:?}", ai, chrono::offset::Local::now());
+                for reg in &ai.registrars {
+                    //println!("reg searching {:?}", reg);
+                    for rtype in &reg.rtypes {
+                        match rtype {
+                            RegistrarType::HTTPRegistrar{tcp_port: port} => {
+                                return Some(sockaddr_from_addr(reg.addr, *port))
+                            },
+                            _ => { },
+                        }
+                    }
+                }
+            }
+        }
+        return None;
+    }
+
+    pub async fn locked_pick_available_https_registrar(lallif: Arc<Mutex<AllInterfaces>>) -> Option<SocketAddr> {
+        //println!("locked getting lock {:?}", chrono::offset::Local::now());
+        let allif = lallif.lock().await;
+        //println!("locked got lock {:?}", chrono::offset::Local::now());
+        let reg = allif.pick_available_https_registrar().await;
+        println!("picked registrar: {:?}", reg);
+        return reg;
+    }
+
 
 }
 
@@ -421,7 +473,9 @@ pub mod tests {
         let writer: Vec<u8> = vec![];
         let awriter = Arc::new(Mutex::new(writer));
         let db1 = DebugOptions { debug_interfaces: true,
-                                 verydebug_interfaces: false,
+                                 debug_registrars:  false,
+                                 debug_joininterfaces:  false,
+                                 debug_proxyactions:    false,
                                  debug_output: awriter.clone() };
         let mut all1 = AllInterfaces::default();
         all1.debug = Arc::new(db1);
@@ -602,19 +656,21 @@ pub mod tests {
     }
 
 
-    async fn async_enable_join_downstream(allif: &mut AllInterfaces,
+    async fn async_enable_join_downstream(lallif:  Arc<Mutex<AllInterfaces>>,
                                           awriter: Arc<Mutex<Vec<u8>>>) -> Result<(), std::io::Error> {
         let mut options = RoosterOptions::default();
-        options.debug_graspmessages = true;
-        options.debug_interfacedetail = true;
-        options.debug_joinnetworks    = true;
+        let mut allif = lallif.lock().await;
+        let debug = { allif.debug.clone() };
+        options.debug_interfaces    = true;
+        options.debug_registrars    = true;
+        options.debug_joininterfaces  = true;
 
         options.add_acp_interface("eth0".to_string());
         options.add_joinlink_interface("join0".to_string());
 
-        allif.store_link_info(&options, allif.debug.clone(), setup_lm()).await;
+        allif.store_link_info(lallif.clone(), &options, debug.clone(), setup_lm()).await;
         allif.store_addr_info(&options, setup_am()).await;
-        allif.store_link_info(&options, allif.debug.clone(), setup_lm_2()).await;
+        allif.store_link_info(lallif.clone(), &options, debug.clone(), setup_lm_2()).await;
         allif.store_addr_info(&options, setup_am_2()).await;
         assert_eq!(allif.interfaces.len(), 2);
 
@@ -692,13 +748,20 @@ pub mod tests {
         let stuff = std::str::from_utf8(&output).unwrap();
         println!("{}",stuff);
 
+        // now pick a registrar from the available ones, returning the SocketAddr for it.
+        assert_eq!(allif.pick_available_https_registrar().await,
+                   Some(std::net::SocketAddr::new(
+                       "fda3:79a6:f6ee:0:200:0:6400:1".parse::<IpAddr>().unwrap(),
+                       8993)));
+
         Ok(())
     }
 
     #[test]
     fn test_enable_join_downstream() -> Result<(), std::io::Error> {
-        let (awriter, mut all1) = setup_ai();
-        aw!(async_enable_join_downstream(&mut all1, awriter)).unwrap();
+        let (awriter, all1) = setup_ai();
+        let lall = Arc::new(Mutex::new(all1));
+        aw!(async_enable_join_downstream(lall, awriter)).unwrap();
         Ok(())
     }
 

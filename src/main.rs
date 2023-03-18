@@ -34,8 +34,13 @@ pub mod error;
 use crate::args::RoosterOptions;
 use crate::interfaces::AllInterfaces;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
+
+    // construct a subscriber that prints formatted traces to stdout
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    // use that subscriber to process traces emitted after this point
+    tracing::subscriber::set_global_default(subscriber).unwrap();
 
     // process the arguments to find out which interface is the uplink
     // interface.
@@ -43,11 +48,17 @@ async fn main() {
     println!("Read in args: {:?}\n", mainargs);
 
     let mut debug_options = crate::debugoptions::DebugOptions::default();
-    if mainargs.debug_graspmessages {
+    if mainargs.debug_interfaces {
         debug_options.debug_interfaces = true;
     }
-    if mainargs.debug_interfacedetail {
-        debug_options.verydebug_interfaces = true;
+    if mainargs.debug_registrars {
+        debug_options.debug_registrars = true;
+    }
+    if mainargs.debug_joininterfaces {
+        debug_options.debug_joininterfaces = true;
+    }
+    if mainargs.debug_proxyactions {
+        debug_options.debug_proxyactions   = true;
     }
     println!("Debug Interfaces is {}", debug_options.debug_interfaces);
 
@@ -65,24 +76,36 @@ async fn main() {
 
     let mut done = false;
     while !done {
-        sleep(Duration::from_millis(10000)).await;
+        sleep(Duration::from_millis(5000)).await;
 
-        debug.debug_verbose(format!("{} main loop", main_loopcount)).await;
         main_loopcount += 1;
+        debug.debug_info(format!("{} main loop", main_loopcount)).await;
 
         done = {
-            let mut doneinterface = interface.lock().await;
 
-            doneinterface.update_available_registrars().await;
-            for ljl in doneinterface.joinlink_interfaces.values() {
+            let (lji_hash, proxies, isitdone) = {
+                let mut doneinterface = interface.lock().await;
+
+                doneinterface.update_available_registrars().await;
+                (doneinterface.joinlink_interfaces.clone(), doneinterface.proxies.clone(), doneinterface.exitnow)
+            };
+            //debug.debug_info(format!("{} join iteration acquired", main_loopcount)).await;
+            // doneinterface lock is released here.
+            let ji_hash = lji_hash.lock().await;
+
+            //debug.debug_info(format!("{} join iteration locked", main_loopcount)).await;
+            for ljl in ji_hash.values() {
+                //debug.debug_info(format!("{} taking ljk lock", main_loopcount)).await;
                 let jl = ljl.lock().await;
-                let sessionid = doneinterface.next_session_id().await;
-                jl.registrar_all_announce(doneinterface.proxies.clone(),
-                                          sessionid).await.unwrap();
+                let session_id = rand::random::<u32>();
+                jl.registrar_all_announce(proxies.clone(),
+                                          session_id).await.unwrap();
             }
 
-            doneinterface.exitnow
-        }
+            //debug.debug_info(format!("{} join iteration unlocking", main_loopcount)).await;
+            isitdone
+        };
+        debug.debug_info(format!("{} end main loop", main_loopcount)).await;
     }
 }
 
