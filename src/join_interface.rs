@@ -201,8 +201,6 @@ impl JoinInterface {
             }
         };
 
-        self.debug.debug_joininterfaces(
-            format!("sending GRASP DULL message about port {}", self.https_port)).await;
         // now write it to socket.
         let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
                                                                  0,0,
