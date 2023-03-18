@@ -89,16 +89,20 @@ async fn main() {
                 doneinterface.update_available_registrars().await;
                 (doneinterface.joinlink_interfaces.clone(), doneinterface.proxies.clone(), doneinterface.exitnow)
             };
+            //debug.debug_info(format!("{} join iteration acquired", main_loopcount)).await;
             // doneinterface lock is released here.
             let ji_hash = lji_hash.lock().await;
 
+            //debug.debug_info(format!("{} join iteration locked", main_loopcount)).await;
             for ljl in ji_hash.values() {
+                //debug.debug_info(format!("{} taking ljk lock", main_loopcount)).await;
                 let jl = ljl.lock().await;
                 let session_id = rand::random::<u32>();
                 jl.registrar_all_announce(proxies.clone(),
                                           session_id).await.unwrap();
             }
 
+            //debug.debug_info(format!("{} join iteration unlocking", main_loopcount)).await;
             isitdone
         };
         debug.debug_info(format!("{} end main loop", main_loopcount)).await;

@@ -222,8 +222,12 @@ impl JoinInterface {
 
         debug.debug_info(format!("new pledge {} looking for Registrar", pledgeaddr)).await;
 
+        let some_target = AllInterfaces::locked_pick_available_https_registrar(lallif).await;
+
+        debug.debug_info(format!("new pledge {} found a Registrar {:?}", pledgeaddr, some_target)).await;
+
         // need to find a useful Registrar to connect to.
-        if let Some(target_sockaddr) = AllInterfaces::locked_pick_available_https_registrar(lallif).await {
+        if let Some(target_sockaddr) = some_target {
             debug.debug_info(format!("new pledge {} connects to {}", pledgeaddr, target_sockaddr)).await;
             match TcpStream::connect(target_sockaddr).await {
                 Ok(mut conn) => {
