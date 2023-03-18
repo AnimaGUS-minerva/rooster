@@ -406,10 +406,12 @@ impl AllInterfaces {
 
     pub async fn pick_available_https_registrar(self: &AllInterfaces) -> Option<SocketAddr> {
         for lifn in self.acp_interfaces.values() {
+            //println!("interfaces locking {:?}", chrono::offset::Local::now());
             let ifn = lifn.lock().await;
             if let Some(lai) = &ifn.acp_daemon {
+                //println!("acp_interfaces locking {:?}", chrono::offset::Local::now());
                 let ai = lai.lock().await;
-                //println!("searching {:?}", ai);
+                //println!("searching {:?} at {:?}", ai, chrono::offset::Local::now());
                 for reg in &ai.registrars {
                     //println!("reg searching {:?}", reg);
                     for rtype in &reg.rtypes {
@@ -427,10 +429,12 @@ impl AllInterfaces {
     }
 
     pub async fn locked_pick_available_https_registrar(lallif: Arc<Mutex<AllInterfaces>>) -> Option<SocketAddr> {
-        println!("locked getting lock");
+        //println!("locked getting lock {:?}", chrono::offset::Local::now());
         let allif = lallif.lock().await;
-        println!("locked got lock");
-        return allif.pick_available_https_registrar().await;
+        //println!("locked got lock {:?}", chrono::offset::Local::now());
+        let reg = allif.pick_available_https_registrar().await;
+        println!("picked registrar: {:?}", reg);
+        return reg;
     }
 
 
