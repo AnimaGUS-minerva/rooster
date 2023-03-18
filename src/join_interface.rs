@@ -236,6 +236,7 @@ impl JoinInterface {
                     debug.debug_info(format!("copied {} / {} bytes between streams", n1,n2)).await;
                     return Ok(())
                 },
+                Err(e) if e.kind() == std::io::ErrorKind::NotConnected => { return Ok(()) },
                 Err(e)   => {
                     debug.debug_error(
                         format!("did not connect to Registrar: {}",e)).await;
