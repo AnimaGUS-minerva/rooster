@@ -292,11 +292,20 @@ impl AllInterfaces {
         debug.debug_info(format!("scanning existing interfaces")).await;
 
         while let Some(link) = list.try_next().await.unwrap() {
-            debug.debug_info(format!("scan message {}", cnt)).await;
+            debug.debug_info(format!("link message {}", cnt)).await;
             AllInterfaces::gather_link_info(&lallif,
                                             &options,
                                             debugextra.clone(),
                                             link).await.unwrap();
+            cnt += 1;
+        }
+
+        let mut list = handle.address().get().execute();
+        while let Some(addr) = list.try_next().await.unwrap() {
+            debug.debug_info(format!("addr message {}", cnt)).await;
+            AllInterfaces::gather_addr_info(&lallif,
+                                            &options,
+                                            addr).await.unwrap();
             cnt += 1;
         }
         Ok(())
