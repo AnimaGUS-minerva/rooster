@@ -13,10 +13,10 @@ moz_cbor   = { git = "https://github.com/AnimaGUS-minerva/cbor-rust.git", branch
 tokio      = { version = "1.7",    features = [ "macros", "io-util", "time", "process", "sync", "signal", "rt-multi-thread"] }
 structopt  = "0.3"
 futures    = "0.3.15"
-rtnetlink     = { version = "0.9" }
+rtnetlink     = { version = "0.11" }
 netlink-proto = { version = "*", features = [ "tokio_socket" ] }
 netlink-packet-sock-diag = "*"
-netlink-packet-route = { version = "*" }
+netlink-packet-route = { version = "0.13" }
 custom_error  = "*"
 rand = { version = "0.8.5", features = ["small_rng"] }
 tracing = "0.1"
