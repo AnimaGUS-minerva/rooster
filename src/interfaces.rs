@@ -577,6 +577,27 @@ pub mod tests {
         }
     }
 
+    /* define a new interface with ifindex, Link-Local address, but with a parent bridge */
+    fn setup_lm_bridge_slave() -> LinkMessage {
+        use netlink_packet_route::link::nlas::Nla;
+
+        LinkMessage {
+            header: LinkHeader { interface_family: AF_INET6 as u8,
+                                 index: 10,
+                                 link_layer_type: ARPHRD_ETHER,
+                                 flags: IFF_UP|IFF_LOWER_UP,
+                                 change_mask: 0xffff_ffff
+            },
+            nlas: vec![
+                Nla::IfName("lan0".to_string()),
+                Nla::Mtu(1500),
+                Nla::Address(vec![0x52, 0x54, 0x00, 0x99, 0x9b, 0xba]),
+                Nla::Master(15),
+                Nla::OperState(State::Up)
+            ],
+        }
+    }
+
     /* define a new interface with ifindex and a Link-Local address */
     fn setup_lm_2() -> LinkMessage {
         use netlink_packet_route::link::nlas::Nla;
@@ -619,6 +640,31 @@ pub mod tests {
         let (_awriter, all1) = setup_ai();
         let mut lallif = Arc::new(Mutex::new(all1));
         aw!(async_locked_add_link(&mut lallif)).unwrap();
+        Ok(())
+    }
+
+    async fn async_add_slave_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
+        let debug = {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 0);
+            allif.debug.clone()
+        };
+        AllInterfaces::gather_link_info(lallif, &options,
+                                        debug.clone(),
+                                        setup_lm_bridge_slave()).await.unwrap();
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.interfaces.len(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_slave_link() -> Result<(), std::io::Error> {
+        let (_awriter, all1) = setup_ai();
+        let mut lallif = Arc::new(Mutex::new(all1));
+        aw!(async_add_slave_link(&mut lallif)).unwrap();
         Ok(())
     }
 
