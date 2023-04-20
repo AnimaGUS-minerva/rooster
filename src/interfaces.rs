@@ -108,6 +108,18 @@ impl AllInterfaces {
         }
     }
 
+    pub async fn count_active_interfaces(self: &AllInterfaces) -> u32 {
+        let mut count = 0;
+        for lifn in self.interfaces.values() {
+            let ifn = lifn.lock().await;
+            if !ifn.ignored {
+                count = count + 1
+            }
+        }
+        count
+    }
+
+
     pub async fn get_entry_by_ifindex<'a>(self: &'a mut AllInterfaces, ifindex: IfIndex) -> Arc<Mutex<Interface>> {
         let ifnl = self.interfaces.entry(ifindex).or_insert_with(|| {
             Arc::new(Mutex::new(Interface::empty(ifindex, self.debug.clone())))
@@ -193,6 +205,51 @@ impl AllInterfaces {
                             mydebug.debug_interfaces(format!("device {} is up", ifn.ifname)).await;
                         }
                         ifn.oper_state = state;
+                    },
+                    Nla::Info(listofstuff) => {
+                        use netlink_packet_route::link::nlas::Info;
+                        //use netlink_packet_route::link::nlas::InfoData;
+                        use netlink_packet_route::link::nlas::InfoKind;
+                        for stuff in listofstuff {
+                            match stuff {
+                                Info::Kind(kind) => {
+                                    print!("  is it a bridge: {:?}", kind);
+                                    match kind {
+                                        InfoKind::Bridge => {
+                                            println!(" yes, bridge__master = true;");
+                                        }
+                                        InfoKind::MacVlan => {
+                                            println!(" macvlan interface=true;")
+                                        }
+                                        InfoKind::IpTun|
+                                        InfoKind::Dummy|
+                                        InfoKind::GreTap|
+                                        InfoKind::GreTun|
+                                        InfoKind::GreTun6|
+                                        InfoKind::Vti|
+                                        InfoKind::SitTun|
+                                        InfoKind::Veth => { println!("veth = true"); },
+                                        _ => { println!("2 other kind {:?}", kind); }
+                                    }
+                                },
+                                Info::Data(_data) => { /* ignore bridge data */ }
+                                Info::SlaveData(_data) => { /* ignore bridge data */ }
+                                Info::SlaveKind(_data) => {
+                                    /* what exactly to do with this data? */
+                                    println!("is slave");
+                                },
+                                _ => { println!("other info: {:?}", stuff); }
+                            }
+                        }
+                    },
+                    Nla::Link(ifmaster) => {
+                        /* could be a bridge, or could be a MACvlan */
+                        println!("   link  interface is {}", ifmaster);
+                    },
+                    Nla::Master(ifmaster)     => {
+                        /* it's part of a bridge, so ignore it */
+                        mydebug.debug_interaces(format!("   part of bridge device ifindex: {}, ignored", ifmaster);
+                        ifn.ignored = true;
                     },
                     Nla::AfSpecInet(inets) => {
                         for ip in inets {
@@ -647,7 +704,7 @@ pub mod tests {
         let options = RoosterOptions::default();
         let debug = {
             let allif      = lallif.lock().await;
-            assert_eq!(allif.interfaces.len(), 0);
+            assert_eq!(allif.count_active_interfaces().await, 0);
             allif.debug.clone()
         };
         AllInterfaces::gather_link_info(lallif, &options,
@@ -655,7 +712,7 @@ pub mod tests {
                                         setup_lm_bridge_slave()).await.unwrap();
         {
             let allif      = lallif.lock().await;
-            assert_eq!(allif.interfaces.len(), 0);
+            assert_eq!(allif.count_active_interfaces().await, 0);
         }
         Ok(())
     }
