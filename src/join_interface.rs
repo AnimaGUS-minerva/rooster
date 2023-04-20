@@ -60,10 +60,10 @@ pub struct JoinInterface {
 
 
 impl JoinInterface {
-    fn open_bound_udpsocket(ifindex: IfIndex, _socknum: u16) -> Result<tokio::net::UdpSocket, std::io::Error> {
+    fn open_bound_udpsocket(ifindex: IfIndex, _socknum: u16, v6addr: Ipv6Addr) -> Result<tokio::net::UdpSocket, std::io::Error> {
 
         /* this is an announce socket, so let kernel decide on port number */
-        let rsin6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED,
+        let rsin6 = SocketAddrV6::new(v6addr,
                                       0, 0, ifindex);
 
         // create a UDP socket
@@ -117,11 +117,14 @@ impl JoinInterface {
     }
 
     pub async fn open_ports(debug: Arc<DebugOptions>,
+                            llv6_addr: Ipv6Addr,
                             ifindex: IfIndex) -> Result<(JoinInterface,JoinSockets), std::io::Error> {
 
-        let grasp_sock     = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
-        let stateless_sock = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
-        let stateful_sock  = JoinInterface::open_bound_udpsocket(ifindex, 0)?;
+        println!("index: {} addr {}", ifindex, llv6_addr);
+
+        let grasp_sock     = JoinInterface::open_bound_udpsocket(ifindex, 0, llv6_addr)?;
+        let stateless_sock = JoinInterface::open_bound_udpsocket(ifindex, 0, llv6_addr)?;
+        let stateful_sock  = JoinInterface::open_bound_udpsocket(ifindex, 0, llv6_addr)?;
         let https_sock     = JoinInterface::open_bound_tcpsocket(ifindex, 0)?;
 
         /* now open a UDP socket for plugging through to Registrar */
@@ -274,7 +277,9 @@ impl JoinInterface {
                               lallif: Arc<Mutex<AllInterfaces>>,
                               _invalidate: Arc<Mutex<bool>>) -> Result<Arc<Mutex<JoinInterface>>, rtnetlink::Error> {
 
-        let (ji,js) = JoinInterface::open_ports(ifn.debug.clone(), ifn.ifindex).await.unwrap();
+        let (ji,js) = JoinInterface::open_ports(ifn.debug.clone(),
+                                                ifn.linklocal6,
+                                                ifn.ifindex).await.unwrap();
 
         let jil = Arc::new(Mutex::new(ji));
         let ji2 = jil.clone();
@@ -353,6 +358,7 @@ pub mod tests {
         ifn.ifindex= 1; // usually lo.
         ifn.ifname = "lo".to_string();
         ifn.ignored= false;
+        ifn.linklocal6 = "fe80::::da58:d7ff:fe00:8d0f".parse::<Ipv6Addr>().unwrap();
         ifn.mtu    = 1500;
         ifn.oper_state = State::Up;
         ifn.acp_daemon = None;
@@ -381,7 +387,7 @@ pub mod tests {
     async fn async_open_socket() -> Result<(), std::io::Error> {
         let (ifn,_all1) = setup_ifn();
         // ifindex=1, is lo
-        let (_aifn,_js) = JoinInterface::open_ports(ifn.debug, 1).await.unwrap();
+        let (_aifn,_js) = JoinInterface::open_ports(ifn.debug, ifn.linklocal6, 1).await.unwrap();
         Ok(())
     }
 
