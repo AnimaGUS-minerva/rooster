@@ -189,6 +189,8 @@ impl JoinInterface {
                                         proxies: ProxiesEnabled,
                                         id: SessionID) -> Result<(), std::io::Error> {
 
+        let debug = self.debug.clone();
+
         let mflood_err = self.build_an_proxy(ifn, proxies, id).await;
         let mflood = match mflood_err {
             Ok(x) => { x },
@@ -206,9 +208,19 @@ impl JoinInterface {
                                                                  0,0,
                                                                  0,0,
                                                                  0,0x13)), 7017);
-        self.grasp_sock.send_to(&mflood, graspdest).await.unwrap();
-
-        Ok(())
+        match self.grasp_sock.send_to(&mflood, graspdest).await {
+            Err(err) => {
+                if err.kind() == ErrorKind::AddrNotAvailable {
+                    debug.debug_info(format!("AddrNotAvailable while {:?} sending to {:?}",
+                                             self.grasp_sock,
+                                             graspdest)).await;
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            },
+            Ok(_) => { return Ok(()) },
+        }
     }
 
     pub async fn proxy_https(lji: Arc<Mutex<JoinInterface>>,
