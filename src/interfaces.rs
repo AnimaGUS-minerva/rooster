@@ -194,11 +194,19 @@ impl AllInterfaces {
                         ifn.mtu = bytes;
                     },
                     Nla::Address(addrset) => {
-                        mydebug.debug_interfaces_detailed(
-                            format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}",
-                                    addrset[0], addrset[1],
-                                    addrset[2], addrset[3],
-                                    addrset[4], addrset[5])).await;
+                        match addrset.len() {
+                            6 => {
+                                mydebug.debug_interfaces_detailed(
+                                    format!("lladdr: {:0x}:{:0x}:{:0x}:{:0x}:{:0x}:{:0x}",
+                                            addrset[0], addrset[1],
+                                            addrset[2], addrset[3],
+                                            addrset[4], addrset[5])).await;
+                            },
+                            _ => {
+                                mydebug.debug_interfaces_detailed(
+                                    format!("lladdr len = {}", addrset.len())).await;
+                            }
+                        }
                     },
                     Nla::OperState(state) => {
                         if state == State::Up {
@@ -681,6 +689,26 @@ pub mod tests {
         }
     }
 
+    /* define a new interface, ifindex a non-ethernet Link-Local address */
+    fn setup_lm_19() -> LinkMessage {
+        use netlink_packet_route::link::nlas::Nla;
+
+        LinkMessage {
+            header: LinkHeader { interface_family: AF_INET6 as u8,
+                                 index: 19,
+                                 link_layer_type: ARPHRD_ETHER,
+                                 flags: IFF_UP|IFF_LOWER_UP,
+                                 change_mask: 0xffff_ffff
+            },
+            nlas: vec![
+                Nla::IfName("fun0".to_string()),
+                Nla::Mtu(1500),
+                Nla::Address(vec![0x52]),
+                Nla::OperState(State::Up)
+            ],
+        }
+    }
+
     async fn async_locked_add_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
         let options = RoosterOptions::default();
         let debug = {
@@ -703,6 +731,31 @@ pub mod tests {
         let (_awriter, all1) = setup_ai();
         let mut lallif = Arc::new(Mutex::new(all1));
         aw!(async_locked_add_link(&mut lallif)).unwrap();
+        Ok(())
+    }
+
+    async fn async_funky_ether_add_link(lallif: &mut Arc<Mutex<AllInterfaces>>) -> Result<(), std::io::Error> {
+        let options = RoosterOptions::default();
+        let debug = {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.count_active_interfaces().await, 0);
+            allif.debug.clone()
+        };
+        AllInterfaces::gather_link_info(lallif, &options,
+                                        debug.clone(),
+                                        setup_lm_19()).await.unwrap();
+        {
+            let allif      = lallif.lock().await;
+            assert_eq!(allif.count_active_interfaces().await, 1);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_funky_ether_add_link() -> Result<(), std::io::Error> {
+        let (_awriter, all1) = setup_ai();
+        let mut lallif = Arc::new(Mutex::new(all1));
+        aw!(async_funky_ether_add_link(&mut lallif)).unwrap();
         Ok(())
     }
 
