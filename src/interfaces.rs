@@ -216,10 +216,10 @@ impl AllInterfaces {
                                     print!("  is it a bridge: {:?}", kind);
                                     match kind {
                                         InfoKind::Bridge => {
-                                            println!(" yes, bridge__master = true;");
+                                            //println!(" yes, bridge__master = true;");
                                         }
                                         InfoKind::MacVlan => {
-                                            println!(" macvlan interface=true;")
+                                            //println!(" macvlan interface=true;")
                                         }
                                         InfoKind::IpTun|
                                         InfoKind::Dummy|
@@ -228,7 +228,9 @@ impl AllInterfaces {
                                         InfoKind::GreTun6|
                                         InfoKind::Vti|
                                         InfoKind::SitTun|
-                                        InfoKind::Veth => { println!("veth = true"); },
+                                        InfoKind::Veth => {
+                                            // println!("veth = true");
+                                        },
                                         _ => { println!("2 other kind {:?}", kind); }
                                     }
                                 },
@@ -236,7 +238,7 @@ impl AllInterfaces {
                                 Info::SlaveData(_data) => { /* ignore bridge data */ }
                                 Info::SlaveKind(_data) => {
                                     /* what exactly to do with this data? */
-                                    println!("is slave");
+                                    //println!("is slave");
                                 },
                                 _ => { println!("other info: {:?}", stuff); }
                             }
@@ -248,7 +250,7 @@ impl AllInterfaces {
                     },
                     Nla::Master(ifmaster)     => {
                         /* it's part of a bridge, so ignore it */
-                        mydebug.debug_interaces(format!("   part of bridge device ifindex: {}, ignored", ifmaster);
+                        mydebug.debug_interfaces(format!("   part of bridge device ifindex: {}, ignored", ifmaster)).await;
                         ifn.ignored = true;
                     },
                     Nla::AfSpecInet(inets) => {
