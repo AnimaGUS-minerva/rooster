@@ -283,6 +283,11 @@ impl AllInterfaces {
             let mut ifn  = ifna.lock().await;
             let mut used = 0;
 
+            /* stop if interface is on ignore list */
+            if ifn.ignored {
+                return ()
+            }
+
             // looks like a new device that is now up!
             if options.is_valid_acp_interface(&ifname) {
                 self.acp_interfaces.entry(ifindex).or_insert_with(|| {
