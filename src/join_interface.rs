@@ -27,7 +27,7 @@ use tokio::net::{UdpSocket, TcpListener, TcpStream};
 //use std::io::Error;
 use std::io::ErrorKind;
 use std::net::{SocketAddrV6};
-use std::net::{SocketAddr, IpAddr, Ipv6Addr};
+use std::net::{SocketAddr, Ipv6Addr};
 use std::sync::Arc;
 use futures::lock::Mutex;
 //use tokio::process::{Command};
@@ -207,10 +207,14 @@ impl JoinInterface {
         };
 
         // now write it to socket.
-        let graspdest = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xff02, 0,
-                                                                 0,0,
-                                                                 0,0,
-                                                                 0,0x13)), 7017);
+        let graspdest = SocketAddrV6::new(Ipv6Addr::new(0xff02, 0,
+                                                            0,0,
+                                                            0,0,
+                                                            0,0x13),
+                                              7017, /* port number */
+                                              0,    /* flowinfo */
+                                              ifn.ifindex);
+
         match self.grasp_sock.send_to(&mflood, graspdest).await {
             Err(err) => {
                 if err.kind() == ErrorKind::AddrNotAvailable {
