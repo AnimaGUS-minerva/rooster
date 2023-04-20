@@ -213,7 +213,6 @@ impl AllInterfaces {
                         for stuff in listofstuff {
                             match stuff {
                                 Info::Kind(kind) => {
-                                    print!("  is it a bridge: {:?}", kind);
                                     match kind {
                                         InfoKind::Bridge => {
                                             //println!(" yes, bridge__master = true;");
